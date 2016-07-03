@@ -1,4 +1,4 @@
-#![crate_name="console"]
+#![crate_name="ransid"]
 #![crate_type="lib"]
 #![feature(alloc)]
 #![feature(collections)]
