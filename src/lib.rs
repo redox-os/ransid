@@ -18,11 +18,9 @@ use core::cmp;
 
 pub use block::Block;
 pub use color::Color;
-pub use style::Style;
 
 pub mod block;
 pub mod color;
-pub mod style;
 
 pub struct Console {
     pub display: Box<[Block]>,
@@ -32,7 +30,9 @@ pub struct Console {
     pub h: usize,
     pub foreground: Color,
     pub background: Color,
-    pub style: Style,
+    pub bold: bool,
+    pub inverted: bool,
+    pub underlined: bool,
     pub cursor: bool,
     pub redraw: bool,
     pub escape: bool,
@@ -52,7 +52,9 @@ impl Console {
             h: h,
             foreground: Color::ansi(7),
             background: Color::ansi(0),
-            style: Style::Normal,
+            bold: false,
+            inverted: false,
+            underlined: false,
             cursor: true,
             redraw: true,
             escape: false,
@@ -66,9 +68,10 @@ impl Console {
     fn block(&self, c: char) -> Block {
         Block {
             c: c,
-            fg: self.foreground,
-            bg: self.background,
-            style: self.style
+            fg: if self.inverted { self.background } else { self.foreground },
+            bg: if self.inverted { self.foreground } else { self.background },
+            bold: self.bold,
+            underlined: self.underlined
         }
     }
 
@@ -94,10 +97,27 @@ impl Console {
                             0 => {
                                 self.foreground = Color::ansi(7);
                                 self.background = Color::ansi(0);
-                                self.style = Style::Normal;
+                                self.bold = false;
+                                self.underlined = false;
+                                self.inverted = false;
                             },
                             1 => {
-                                self.style = Style::Bold;
+                                self.bold = true;
+                            },
+                            4 => {
+                                self.underlined = true;
+                            },
+                            7 => {
+                                self.inverted = true;
+                            },
+                            21 => {
+                                self.bold = false;
+                            },
+                            24 => {
+                                self.underlined = false;
+                            },
+                            27 => {
+                                self.inverted = false;
                             },
                             30 ... 37 => self.foreground = Color::ansi(value - 30),
                             38 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
@@ -115,6 +135,9 @@ impl Console {
                                 },
                                 _ => {}
                             },
+                            39 => {
+                                self.foreground = Color::ansi(7);
+                            },
                             40 ... 47 => self.background = Color::ansi(value - 40),
                             48 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
                                 2 => {
@@ -130,6 +153,9 @@ impl Console {
                                     self.background = Color::ansi(color_value);
                                 },
                                 _ => {}
+                            },
+                            49 => {
+                                self.background = Color::ansi(0);
                             },
                             _ => {},
                         }
@@ -303,7 +329,9 @@ impl Console {
                     self.raw_mode = false;
                     self.foreground = Color::ansi(7);
                     self.background = Color::ansi(0);
-                    self.style = Style::Normal;
+                    self.bold = false;
+                    self.inverted = false;
+                    self.underlined = false;
                     let block = self.block(' ');
                     for c in self.display.iter_mut() {
                         *c = block;
