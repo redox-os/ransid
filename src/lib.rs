@@ -61,6 +61,24 @@ impl Console {
             escape_sequence: false,
             escape_extra: false,
             sequence: Vec::new(),
+
+            /*
+            @MANSTART{terminal-raw-mode}
+            INTRODUCTION
+                Since Redox has no ioctl syscall, it uses escape codes for switching to raw mode.
+
+            ENTERING AND EXITING RAW MODE
+                Entering raw mode is done using CSI-r (^[?82h). Unsetting raw mode is done by CSI-R (^[?82l).
+
+            RAW MODE
+                Raw mode means that the stdin must be handled solely by the program itself. It will not automatically be printed nor will it be modified in any way (modulo escape codes).
+
+                This means that:
+                    - stdin is not printed.
+                    - newlines are interpreted as carriage returns in stdin.
+                    - stdin is not buffered, meaning that the stream of bytes goes directly to the program, without the user having to press enter.
+            @MANEND
+            */
             raw_mode: false,
         }
     }
@@ -264,35 +282,11 @@ impl Console {
 
                     self.escape_sequence = false;
                 },
-                /*
-                @MANSTART{terminal-raw-mode}
-                INTRODUCTION
-                    Since Redox has no ioctl syscall, it uses escape codes for switching to raw mode.
-
-                ENTERING AND EXITING RAW MODE
-                    Entering raw mode is done using CSI-r (^[r). Unsetting raw mode is done by CSI-R (^[R).
-
-                RAW MODE
-                    Raw mode means that the stdin must be handled solely by the program itself. It will not automatically be printed nor will it be modified in any way (modulo escape codes).
-
-                    This means that:
-                        - stdin is not printed.
-                        - newlines are interpreted as carriage returns in stdin.
-                        - stdin is not buffered, meaning that the stream of bytes goes directly to the program, without the user having to press enter.
-                @MANEND
-                */
-                'r' => {
-                    self.raw_mode = true;
-                    self.escape_sequence = false;
-                },
-                'R' => {
-                    self.raw_mode = false;
-                    self.escape_sequence = false;
-                },
                 '?' => self.escape_extra = true,
                 'h' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         25 => self.cursor = true,
+                        82 => self.raw_mode = true,
                         _ => ()
                     }
 
@@ -301,6 +295,7 @@ impl Console {
                 'l' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         25 => self.cursor = false,
+                        82 => self.raw_mode = false,
                         _ => ()
                     }
 
