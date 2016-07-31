@@ -14,7 +14,7 @@ use alloc::boxed::Box;
 use collections::String;
 use collections::Vec;
 
-use core::cmp;
+use core::{char, cmp};
 
 pub use block::Block;
 pub use color::Color;
@@ -35,6 +35,8 @@ pub struct Console {
     pub underlined: bool,
     pub cursor: bool,
     pub redraw: bool,
+    pub utf_data: u32,
+    pub utf_step: u32,
     pub escape: bool,
     pub escape_sequence: bool,
     pub escape_extra: bool,
@@ -57,6 +59,8 @@ impl Console {
             underlined: false,
             cursor: true,
             redraw: true,
+            utf_data: 0,
+            utf_step: 0,
             escape: false,
             escape_sequence: false,
             escape_extra: false,
@@ -396,13 +400,54 @@ impl Console {
 
     pub fn write(&mut self, bytes: &[u8]) {
         for byte in bytes.iter() {
-            let c = *byte as char;
+            let c_opt = match *byte {
+                //ASCII
+                0b00000000 ... 0b01111111 => {
+                    Some(*byte as char)
+                },
+                //Continuation byte
+                0b10000000 ... 0b10111111 if self.utf_step > 0 => {
+                    self.utf_step -= 1;
+                    self.utf_data |= ((*byte as u32) & 0b111111) << (6 * self.utf_step);
+                    if self.utf_step == 0 {
+                        let data = self.utf_data;
+                        self.utf_data = 0;
+                        char::from_u32(data)
+                    } else {
+                        None
+                    }
+                },
+                //Two byte lead
+                0b11000000 ... 0b11011111 => {
+                    self.utf_step = 1;
+                    self.utf_data = ((*byte as u32) & 0b11111) << (6 * self.utf_step);
+                    None
+                },
+                //Three byte lead
+                0b11100000 ... 0b11101111 => {
+                    self.utf_step = 2;
+                    self.utf_data = ((*byte as u32) & 0b1111) << (6 * self.utf_step);
+                    None
+                },
+                //Four byte lead
+                0b11110000 ... 0b11110111 => {
+                    self.utf_step = 3;
+                    self.utf_data = ((*byte as u32) & 0b111) << (6 * self.utf_step);
+                    None
+                },
+                //Invalid, use replacement character
+                _ => {
+                    char::from_u32(0xFFFD)
+                }
+            };
 
-            if self.escape {
-                self.code(c);
-            } else {
-                self.character(c);
+            if let Some(c) = c_opt {
+                if self.escape {
+                    self.code(c);
+                } else {
+                    self.character(c);
+                }
             }
-        }
+        };
     }
 }
