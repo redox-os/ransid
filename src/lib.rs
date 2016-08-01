@@ -97,6 +97,27 @@ impl Console {
         }
     }
 
+    pub fn fix_cursor(&mut self) {
+        if self.x >= self.w {
+            self.x = 0;
+            self.y += 1;
+        }
+
+        while self.y + 1 > self.h {
+            for y in 1..self.h {
+                for x in 0..self.w {
+                    let c = self.display[y * self.w + x];
+                    self.display[(y - 1) * self.w + x] = c;
+                }
+            }
+            let block = self.block(' ');
+            for x in 0..self.w {
+                self.display[(self.h - 1) * self.w + x] = block;
+            }
+            self.y -= 1;
+        }
+    }
+
     pub fn code(&mut self, c: char) {
         if self.escape_sequence {
             match c {
@@ -211,6 +232,8 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'J' => {
+                    self.fix_cursor();
+
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         0 => {
                             let block = self.block(' ');
@@ -249,6 +272,8 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'K' => {
+                    self.fix_cursor();
+
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         0 => {
                             let block = self.block(' ');
@@ -345,6 +370,8 @@ impl Console {
     }
 
     pub fn character(&mut self, c: char) {
+        self.fix_cursor();
+
         match c {
             '\0' => {},
             '\x1B' => self.escape = true,
@@ -376,25 +403,6 @@ impl Console {
 
                 self.x += 1;
             }
-        }
-
-        if self.x >= self.w {
-            self.x = 0;
-            self.y += 1;
-        }
-
-        while self.y + 1 > self.h {
-            for y in 1..self.h {
-                for x in 0..self.w {
-                    let c = self.display[y * self.w + x];
-                    self.display[(y - 1) * self.w + x] = c;
-                }
-            }
-            let block = self.block(' ');
-            for x in 0..self.w {
-                self.display[(self.h - 1) * self.w + x] = block;
-            }
-            self.y -= 1;
         }
     }
 
