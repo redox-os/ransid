@@ -24,6 +24,7 @@ pub mod color;
 
 pub struct Console {
     pub display: Box<[Block]>,
+    pub changed: Box<[bool]>,
     pub x: usize,
     pub y: usize,
     pub w: usize,
@@ -48,6 +49,7 @@ impl Console {
     pub fn new(w: usize, h: usize) -> Console {
         Console {
             display: vec![Block::new(); w * h].into_boxed_slice(),
+            changed: vec![true; h].into_boxed_slice(),
             x: 0,
             y: 0,
             w: w,
@@ -97,23 +99,41 @@ impl Console {
         }
     }
 
+    pub fn change(&mut self, row: usize) {
+        if let Some(mut c) = self.changed.get_mut(row) {
+            *c = true;
+        }
+    }
+
+    pub fn change_cursor(&mut self) {
+        let row = self.y;
+        self.change(row);
+    }
+
     pub fn fix_cursor(&mut self) {
-        if self.x >= self.w {
+        let w = self.w;
+        let h = self.h;
+
+        if self.x >= w {
             self.x = 0;
+            self.change_cursor();
             self.y += 1;
+            self.change_cursor();
         }
 
-        while self.y + 1 > self.h {
-            for y in 1..self.h {
-                for x in 0..self.w {
-                    let c = self.display[y * self.w + x];
-                    self.display[(y - 1) * self.w + x] = c;
+        while self.y + 1 > h {
+            for y in 1..h {
+                for x in 0..w {
+                    let c = self.display[y * w + x];
+                    self.display[(y - 1) * w + x] = c;
                 }
+                self.change(y - 1);
             }
             let block = self.block(' ');
-            for x in 0..self.w {
-                self.display[(self.h - 1) * self.w + x] = block;
+            for x in 0..w {
+                self.display[(h - 1) * w + x] = block;
             }
+            self.change(h - 1);
             self.y -= 1;
         }
     }
@@ -207,27 +227,37 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'A' => {
+                    self.change_cursor();
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'B' => {
+                    self.change_cursor();
                     self.y += cmp::min(self.h - 1 - self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'C' => {
                     self.x += cmp::min(self.w - 1 - self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'D' => {
                     self.x -= cmp::min(self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'H' | 'f' => {
+                    self.change_cursor();
+
                     let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
                     self.y = cmp::max(0, row - 1) as usize;
 
                     let col = self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
                     self.x = cmp::max(0, col - 1) as usize;
+
+                    self.change_cursor();
 
                     self.escape_sequence = false;
                 },
@@ -240,6 +270,9 @@ impl Console {
                             for c in self.display[self.y * self.w + self.x ..].iter_mut() {
                                 *c = block;
                             }
+                            for c in self.changed[self.y ..].iter_mut() {
+                                *c = true;
+                            }
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -249,6 +282,9 @@ impl Console {
                             /* Should this add one? */
                             for c in self.display[.. self.y * self.w + self.x + 1].iter_mut() {
                                 *c = block;
+                            }
+                            for c in self.changed[.. self.y + 1].iter_mut() {
+                                *c = true;
                             }
                             if ! self.raw_mode {
                                 self.redraw = true;
@@ -261,6 +297,9 @@ impl Console {
                             let block = self.block(' ');
                             for c in self.display.iter_mut() {
                                 *c = block;
+                            }
+                            for c in self.changed.iter_mut() {
+                                *c = true;
                             }
                             if ! self.raw_mode {
                                 self.redraw = true;
@@ -280,6 +319,7 @@ impl Console {
                             for c in self.display[self.y * self.w + self.x .. self.y * self.w + self.w].iter_mut() {
                                 *c = block;
                             }
+                            self.change_cursor();
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -290,6 +330,7 @@ impl Console {
                             for c in self.display[self.y * self.w .. self.y * self.w + self.x + 1].iter_mut() {
                                 *c = block;
                             }
+                            self.change_cursor();
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -299,9 +340,10 @@ impl Console {
                             self.x = 0;
                             self.y = 0;
                             let block = self.block(' ');
-                            for c in self.display.iter_mut() {
+                            for c in self.display[self.y * self.w .. self.y * self.w + self.w].iter_mut() {
                                 *c = block;
                             }
+                            self.change_cursor();
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -360,6 +402,9 @@ impl Console {
                     for c in self.display.iter_mut() {
                         *c = block;
                     }
+                    for c in self.changed.iter_mut() {
+                        *c = true;
+                    }
                     self.redraw = true;
 
                     self.escape = false;
@@ -376,14 +421,22 @@ impl Console {
             '\0' => {},
             '\x1B' => self.escape = true,
             '\n' => {
+                self.change_cursor();
                 self.x = 0;
                 self.y += 1;
                 if ! self.raw_mode {
                     self.redraw = true;
                 }
+                self.change_cursor();
             },
-            '\t' => self.x = ((self.x / 8) + 1) * 8,
-            '\r' => self.x = 0,
+            '\t' => {
+                self.x = ((self.x / 8) + 1) * 8;
+                self.change_cursor();
+            },
+            '\r' => {
+                self.x = 0;
+                self.change_cursor();
+            },
             '\x08' => {
                 if self.x >= 1 {
                     self.x -= 1;
@@ -391,15 +444,18 @@ impl Console {
                     if ! self.raw_mode {
                         self.display[self.y * self.w + self.x] = self.block(' ');
                     }
+                    self.change_cursor();
                 }
             },
             ' ' => {
                 self.display[self.y * self.w + self.x] = self.block(' ');
+                self.change_cursor();
 
                 self.x += 1;
             },
             _ => {
                 self.display[self.y * self.w + self.x] = self.block(c);
+                self.change_cursor();
 
                 self.x += 1;
             }
