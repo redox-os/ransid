@@ -1,30 +1,43 @@
 #![crate_name="ransid"]
 #![crate_type="lib"]
-#![feature(alloc)]
 #![feature(collections)]
 #![no_std]
 
-extern crate alloc;
-
 #[macro_use]
 extern crate collections;
-
-use alloc::boxed::Box;
 
 use collections::String;
 use collections::Vec;
 
 use core::{char, cmp};
 
-pub use block::Block;
 pub use color::Color;
 
-pub mod block;
 pub mod color;
 
+pub enum Event {
+    Char {
+        x: usize,
+        y: usize,
+        c: char,
+        bold: bool,
+        underlined: bool,
+        color: Color
+    },
+    Rect {
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        color: Color
+    },
+    Scroll {
+        rows: usize,
+        color: Color
+    }
+}
+
 pub struct Console {
-    pub display: Box<[Block]>,
-    pub changed: Box<[bool]>,
     pub x: usize,
     pub y: usize,
     pub w: usize,
@@ -48,8 +61,6 @@ pub struct Console {
 impl Console {
     pub fn new(w: usize, h: usize) -> Console {
         Console {
-            display: vec![Block::new(); w * h].into_boxed_slice(),
-            changed: vec![true; h].into_boxed_slice(),
             x: 0,
             y: 0,
             w: w,
@@ -89,56 +100,48 @@ impl Console {
         }
     }
 
-    fn block(&self, c: char) -> Block {
-        Block {
+    fn block<F: FnMut(Event)>(&self, x: usize, y: usize, c: char, callback: &mut F) {
+        callback(Event::Rect {
+            x: x,
+            y: y,
+            w: 1,
+            h: 1,
+            color: if self.inverted { self.foreground } else { self.background }
+        });
+        callback(Event::Char {
+            x: x,
+            y: y,
             c: c,
-            fg: if self.inverted { self.background } else { self.foreground },
-            bg: if self.inverted { self.foreground } else { self.background },
             bold: self.bold,
-            underlined: self.underlined
-        }
+            underlined: self.underlined,
+            color: if self.inverted { self.background } else { self.foreground }
+        });
     }
 
-    pub fn change(&mut self, row: usize) {
-        if let Some(mut c) = self.changed.get_mut(row) {
-            *c = true;
-        }
+    fn scroll<F: FnMut(Event)>(&self, rows: usize, callback: &mut F) {
+        callback(Event::Scroll {
+            rows: rows,
+            color: self.background
+        });
     }
 
-    pub fn change_cursor(&mut self) {
-        let row = self.y;
-        self.change(row);
-    }
-
-    pub fn fix_cursor(&mut self) {
+    fn fix_cursor<F: FnMut(Event)>(&mut self, callback: &mut F) {
         let w = self.w;
         let h = self.h;
 
         if self.x >= w {
             self.x = 0;
-            self.change_cursor();
             self.y += 1;
-            self.change_cursor();
         }
 
-        while self.y + 1 > h {
-            for y in 1..h {
-                for x in 0..w {
-                    let c = self.display[y * w + x];
-                    self.display[(y - 1) * w + x] = c;
-                }
-                self.change(y - 1);
-            }
-            let block = self.block(' ');
-            for x in 0..w {
-                self.display[(h - 1) * w + x] = block;
-            }
-            self.change(h - 1);
-            self.y -= 1;
+        if self.y + 1 > h {
+            let rows = self.y + 1 - h;
+            self.scroll(rows, callback);
+            self.y -= rows;
         }
     }
 
-    pub fn code(&mut self, c: char) {
+    pub fn code<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
         if self.escape_sequence {
             match c {
                 '0' ... '9' => {
@@ -227,65 +230,76 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'A' => {
-                    self.change_cursor();
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
-                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'B' => {
-                    self.change_cursor();
                     self.y += cmp::min(self.h - 1 - self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
-                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'C' => {
                     self.x += cmp::min(self.w - 1 - self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
-                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'D' => {
                     self.x -= cmp::min(self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
-                    self.change_cursor();
                     self.escape_sequence = false;
                 },
                 'H' | 'f' => {
-                    self.change_cursor();
-
                     let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
                     self.y = cmp::max(0, row - 1) as usize;
 
                     let col = self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
                     self.x = cmp::max(0, col - 1) as usize;
 
-                    self.change_cursor();
-
                     self.escape_sequence = false;
                 },
                 'J' => {
-                    self.fix_cursor();
+                    self.fix_cursor(callback);
 
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         0 => {
-                            let block = self.block(' ');
-                            for c in self.display[self.y * self.w + self.x ..].iter_mut() {
-                                *c = block;
-                            }
-                            for c in self.changed[self.y ..].iter_mut() {
-                                *c = true;
-                            }
+                            // Clear current row from cursor
+                            callback(Event::Rect {
+                                x: self.x,
+                                y: self.y,
+                                w: self.w - self.x,
+                                h: 1,
+                                color: self.background
+                            });
+
+                            // Clear following rows
+                            callback(Event::Rect {
+                                x: 0,
+                                y: self.y,
+                                w: self.w,
+                                h: self.h - self.y,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
                         },
                         1 => {
-                            let block = self.block(' ');
-                            /* Should this add one? */
-                            for c in self.display[.. self.y * self.w + self.x + 1].iter_mut() {
-                                *c = block;
-                            }
-                            for c in self.changed[.. self.y + 1].iter_mut() {
-                                *c = true;
-                            }
+                            // Clear previous rows
+                            callback(Event::Rect {
+                                x: 0,
+                                y: 0,
+                                w: self.w,
+                                h: self.y,
+                                color: self.background
+                            });
+
+                            // Clear current row to cursor
+                            callback(Event::Rect {
+                                x: 0,
+                                y: self.y,
+                                w: self.x,
+                                h: 1,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -294,13 +308,16 @@ impl Console {
                             // Erase all
                             self.x = 0;
                             self.y = 0;
-                            let block = self.block(' ');
-                            for c in self.display.iter_mut() {
-                                *c = block;
-                            }
-                            for c in self.changed.iter_mut() {
-                                *c = true;
-                            }
+
+                            // Clear all rows
+                            callback(Event::Rect {
+                                x: 0,
+                                y: 0,
+                                w: self.w,
+                                h: self.h,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -311,39 +328,47 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'K' => {
-                    self.fix_cursor();
+                    self.fix_cursor(callback);
 
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         0 => {
-                            let block = self.block(' ');
-                            for c in self.display[self.y * self.w + self.x .. self.y * self.w + self.w].iter_mut() {
-                                *c = block;
-                            }
-                            self.change_cursor();
+                            // Clear current row from cursor
+                            callback(Event::Rect {
+                                x: self.x,
+                                y: self.y,
+                                w: self.w - self.x,
+                                h: 1,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
                         },
                         1 => {
-                            let block = self.block(' ');
-                            /* Should this add one? */
-                            for c in self.display[self.y * self.w .. self.y * self.w + self.x + 1].iter_mut() {
-                                *c = block;
-                            }
-                            self.change_cursor();
+                            // Clear current row to cursor
+                            callback(Event::Rect {
+                                x: 0,
+                                y: self.y,
+                                w: self.x,
+                                h: 1,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
                         },
                         2 => {
-                            // Erase all
-                            self.x = 0;
-                            self.y = 0;
-                            let block = self.block(' ');
-                            for c in self.display[self.y * self.w .. self.y * self.w + self.w].iter_mut() {
-                                *c = block;
-                            }
-                            self.change_cursor();
+                            // Erase row
+                            callback(Event::Rect {
+                                x: 0,
+                                y: self.y,
+                                w: self.w,
+                                h: 1,
+                                color: self.background
+                            });
+
                             if ! self.raw_mode {
                                 self.redraw = true;
                             }
@@ -398,13 +423,16 @@ impl Console {
                     self.bold = false;
                     self.inverted = false;
                     self.underlined = false;
-                    let block = self.block(' ');
-                    for c in self.display.iter_mut() {
-                        *c = block;
-                    }
-                    for c in self.changed.iter_mut() {
-                        *c = true;
-                    }
+
+                    // Clear screen
+                    callback(Event::Rect {
+                        x: 0,
+                        y: 0,
+                        w: self.w,
+                        h: self.h,
+                        color: self.background
+                    });
+
                     self.redraw = true;
 
                     self.escape = false;
@@ -414,55 +442,48 @@ impl Console {
         }
     }
 
-    pub fn character(&mut self, c: char) {
-        self.fix_cursor();
+    pub fn character<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
+        self.fix_cursor(callback);
 
         match c {
             '\0' => {},
             '\x1B' => self.escape = true,
             '\n' => {
-                self.change_cursor();
                 self.x = 0;
                 self.y += 1;
                 if ! self.raw_mode {
                     self.redraw = true;
                 }
-                self.change_cursor();
             },
             '\t' => {
                 self.x = ((self.x / 8) + 1) * 8;
-                self.change_cursor();
             },
             '\r' => {
                 self.x = 0;
-                self.change_cursor();
             },
             '\x08' => {
                 if self.x >= 1 {
                     self.x -= 1;
 
                     if ! self.raw_mode {
-                        self.display[self.y * self.w + self.x] = self.block(' ');
+                        self.block(self.x, self.y, ' ', callback);
                     }
-                    self.change_cursor();
                 }
             },
             ' ' => {
-                self.display[self.y * self.w + self.x] = self.block(' ');
-                self.change_cursor();
+                self.block(self.x, self.y, ' ', callback);
 
                 self.x += 1;
             },
             _ => {
-                self.display[self.y * self.w + self.x] = self.block(c);
-                self.change_cursor();
+                self.block(self.x, self.y, c, callback);
 
                 self.x += 1;
             }
         }
     }
 
-    pub fn write(&mut self, bytes: &[u8]) {
+    pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
         for byte in bytes.iter() {
             let c_opt = match *byte {
                 //ASCII
@@ -507,9 +528,9 @@ impl Console {
 
             if let Some(c) = c_opt {
                 if self.escape {
-                    self.code(c);
+                    self.code(c, &mut callback);
                 } else {
-                    self.character(c);
+                    self.character(c, &mut callback);
                 }
             }
         };
