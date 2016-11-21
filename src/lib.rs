@@ -481,6 +481,10 @@ impl Console {
                 self.x += 1;
             }
         }
+
+        if ! self.raw_mode {
+            self.fix_cursor(callback);
+        }
     }
 
     pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
