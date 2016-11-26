@@ -417,6 +417,7 @@ impl Console {
                     // Reset
                     self.x = 0;
                     self.y = 0;
+                    self.cursor = true;
                     self.raw_mode = false;
                     self.foreground = Color::ansi(7);
                     self.background = Color::ansi(0);
