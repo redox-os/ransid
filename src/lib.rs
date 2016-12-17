@@ -447,22 +447,9 @@ impl Console {
         self.fix_cursor(callback);
 
         match c {
-            '\0' => {},
-            '\x1B' => self.escape = true,
-            '\n' => {
-                self.x = 0;
-                self.y += 1;
-                if ! self.raw_mode {
-                    self.redraw = true;
-                }
-            },
-            '\t' => {
-                self.x = ((self.x / 8) + 1) * 8;
-            },
-            '\r' => {
-                self.x = 0;
-            },
-            '\x08' => {
+            '\x00' ... '\x06' => {}, // Ignore
+            '\x07' => {}, // FIXME: Add bell
+            '\x08' => { // Backspace
                 if self.x >= 1 {
                     self.x -= 1;
 
@@ -471,7 +458,26 @@ impl Console {
                     }
                 }
             },
-            ' ' => {
+            '\x09' => { // Tab
+                self.x = ((self.x / 8) + 1) * 8;
+            },
+            '\x0A' => { // Newline
+                self.x = 0;
+                self.y += 1;
+                if ! self.raw_mode {
+                    self.redraw = true;
+                }
+            },
+            '\x0B' ... '\x0C' => {} // Ignore
+            '\x0D' => { // Carriage Return
+                self.x = 0;
+            },
+            '\x0E' ... '\x1A' => {} // Ignore
+            '\x1B' => { // Escape
+                self.escape = true;
+            },
+            '\x1C' ... '\x1F' => {} // Ignore
+            ' ' => { // Space
                 self.block(self.x, self.y, ' ', callback);
 
                 self.x += 1;
