@@ -3,7 +3,6 @@
 #![feature(collections)]
 #![no_std]
 
-#[macro_use]
 extern crate collections;
 
 use collections::String;
@@ -34,6 +33,9 @@ pub enum Event {
     Scroll {
         rows: usize,
         color: Color
+    },
+    Title {
+        title: String
     }
 }
 
@@ -53,6 +55,7 @@ pub struct Console {
     pub utf_step: u32,
     pub escape: bool,
     pub escape_sequence: bool,
+    pub escape_os: bool,
     pub escape_extra: bool,
     pub sequence: Vec<String>,
     pub raw_mode: bool,
@@ -76,6 +79,7 @@ impl Console {
             utf_step: 0,
             escape: false,
             escape_sequence: false,
+            escape_os: false,
             escape_extra: false,
             sequence: Vec::new(),
 
@@ -405,12 +409,59 @@ impl Console {
                 self.escape = false;
                 self.escape_extra = false;
             }
+        } else if self.escape_os {
+            match c {
+                ';' => {
+                    // Split sequence into list
+                    self.sequence.push(String::new());
+                },
+                '\x07' => {
+                    // Break on BEL
+                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
+                        0 | 1 | 2 => {
+                            // Set window title
+                            let mut title = String::new();
+                            for (i, seq) in self.sequence.iter().skip(1).enumerate() {
+                                if i > 0 {
+                                    title.push(';');
+                                }
+                                title.push_str(seq);
+                            }
+
+                            callback(Event::Title {
+                                title: title
+                            });
+                        },
+                        _ => ()
+                    }
+
+                    self.escape_os = false;
+                },
+                _ => {
+                    // Add a character to the sequence list
+                    if let Some(mut value) = self.sequence.last_mut() {
+                        value.push(c);
+                    }
+                },
+            }
+
+            if !self.escape_os {
+                self.sequence.clear();
+                self.escape = false;
+                self.escape_extra = false;
+            }
         } else {
             match c {
                 '[' => {
                     // Control sequence initiator
 
                     self.escape_sequence = true;
+                    self.sequence.push(String::new());
+                },
+                ']' => {
+                    // Operating system command
+
+                    self.escape_os = true;
                     self.sequence.push(String::new());
                 },
                 'c' => {
