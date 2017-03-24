@@ -104,17 +104,17 @@ impl Console {
         }
     }
 
-    fn block<F: FnMut(Event)>(&self, x: usize, y: usize, c: char, callback: &mut F) {
+    fn block<F: FnMut(Event)>(&self, c: char, callback: &mut F) {
         callback(Event::Rect {
-            x: x,
-            y: y,
+            x: self.x,
+            y: self.y,
             w: 1,
             h: 1,
             color: if self.inverted { self.foreground } else { self.background }
         });
         callback(Event::Char {
-            x: x,
-            y: y,
+            x: self.x,
+            y: self.y,
             c: c,
             bold: self.bold,
             underlined: self.underlined,
@@ -505,7 +505,7 @@ impl Console {
                     self.x -= 1;
 
                     if ! self.raw_mode {
-                        self.block(self.x, self.y, ' ', callback);
+                        self.block(' ', callback);
                     }
                 }
             },
@@ -529,12 +529,12 @@ impl Console {
             },
             '\x1C' ... '\x1F' => {} // Ignore
             ' ' => { // Space
-                self.block(self.x, self.y, ' ', callback);
+                self.block(' ', callback);
 
                 self.x += 1;
             },
             _ => {
-                self.block(self.x, self.y, c, callback);
+                self.block(c, callback);
 
                 self.x += 1;
             }
