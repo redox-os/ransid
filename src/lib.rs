@@ -1,20 +1,13 @@
 #![crate_name="ransid"]
 #![crate_type="lib"]
-#![feature(collections)]
-#![no_std]
 
-extern crate collections;
-
-use collections::String;
-use collections::Vec;
-
-use core::{char, cmp};
+use std::{char, cmp};
 
 pub use color::Color;
 
 pub mod color;
 
-pub enum Event {
+pub enum Event<'a> {
     Char {
         x: usize,
         y: usize,
@@ -22,6 +15,9 @@ pub enum Event {
         bold: bool,
         underlined: bool,
         color: Color
+    },
+    Input {
+        data: &'a [u8]
     },
     Rect {
         x: usize,
@@ -42,6 +38,8 @@ pub enum Event {
 pub struct Console {
     pub x: usize,
     pub y: usize,
+    pub save_x: usize,
+    pub save_y: usize,
     pub w: usize,
     pub h: usize,
     pub foreground: Color,
@@ -66,6 +64,8 @@ impl Console {
         Console {
             x: 0,
             y: 0,
+            save_x: 0,
+            save_y: 0,
             w: w,
             h: h,
             foreground: Color::ansi(7),
@@ -233,6 +233,28 @@ impl Console {
 
                     self.escape_sequence = false;
                 },
+                'n' => {
+                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
+                        6 => {
+                            let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
+                            callback(Event::Input {
+                                data: &report.into_bytes()
+                            });
+                        },
+                        _ => ()
+                    }
+                    self.escape_sequence = false;
+                },
+                's' => {
+                    self.save_x = self.x;
+                    self.save_y = self.y;
+                    self.escape_sequence = false;
+                },
+                'u' => {
+                    self.x = self.save_x;
+                    self.y = self.save_y;
+                    self.escape_sequence = false;
+                },
                 'A' => {
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
                     self.escape_sequence = false;
@@ -251,10 +273,10 @@ impl Console {
                 },
                 'H' | 'f' => {
                     let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
-                    self.y = cmp::max(0, row - 1) as usize;
+                    self.y = cmp::max(0, cmp::min(self.h as isize - 1, row - 1)) as usize;
 
                     let col = self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
-                    self.x = cmp::max(0, col - 1) as usize;
+                    self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
 
                     self.escape_sequence = false;
                 },
@@ -464,10 +486,23 @@ impl Console {
                     self.escape_os = true;
                     self.sequence.push(String::new());
                 },
+                '7' => {
+                    // Save
+                    self.save_x = self.x;
+                    self.save_y = self.y;
+                    self.escape = false;
+                },
+                '8' => {
+                    self.x = self.save_x;
+                    self.y = self.save_y;
+                    self.escape = false;
+                },
                 'c' => {
                     // Reset
                     self.x = 0;
                     self.y = 0;
+                    self.save_x = 0;
+                    self.save_y = 0;
                     self.cursor = true;
                     self.raw_mode = false;
                     self.foreground = Color::ansi(7);
@@ -495,7 +530,9 @@ impl Console {
     }
 
     pub fn character<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
-        self.fix_cursor(callback);
+        if c != '\x1B' {
+            self.fix_cursor(callback);
+        }
 
         match c {
             '\x00' ... '\x06' => {}, // Ignore
