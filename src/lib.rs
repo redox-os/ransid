@@ -26,6 +26,10 @@ pub enum Event<'a> {
         h: usize,
         color: Color
     },
+    ScreenBuffer {
+        alternate: bool,
+        clear: bool,
+    },
     Scroll {
         rows: usize,
         color: Color
@@ -57,6 +61,10 @@ pub struct Console {
     pub escape_extra: bool,
     pub sequence: Vec<String>,
     pub raw_mode: bool,
+    pub mouse_vt200: bool,
+    pub mouse_btn: bool,
+    pub mouse_sgr: bool,
+    pub mouse_rxvt: bool,
 }
 
 impl Console {
@@ -101,6 +109,10 @@ impl Console {
             @MANEND
             */
             raw_mode: false,
+            mouse_vt200: false,
+            mouse_btn: false,
+            mouse_sgr: false,
+            mouse_rxvt: false,
         }
     }
 
@@ -408,7 +420,32 @@ impl Console {
                 'h' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         25 => self.cursor = true,
+                        47 => callback(Event::ScreenBuffer {
+                            alternate: true,
+                            clear: false,
+                        }),
                         82 => self.raw_mode = true,
+                        1000 => self.mouse_vt200 = true,
+                        1002 => self.mouse_btn = true,
+                        1006 => self.mouse_sgr = true,
+                        1015 => self.mouse_rxvt = true,
+                        1047 => callback(Event::ScreenBuffer {
+                            alternate: true,
+                            clear: false,
+                        }),
+                        1048 => {
+                            self.save_x = self.x;
+                            self.save_y = self.y;
+                        },
+                        1049 => {
+                            self.save_x = self.x;
+                            self.save_y = self.y;
+
+                            callback(Event::ScreenBuffer {
+                                alternate: true,
+                                clear: true,
+                            });
+                        },
                         _ => ()
                     }
 
@@ -417,7 +454,32 @@ impl Console {
                 'l' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         25 => self.cursor = false,
+                        47 => callback(Event::ScreenBuffer {
+                            alternate: false,
+                            clear: false,
+                        }),
                         82 => self.raw_mode = false,
+                        1000 => self.mouse_vt200 = false,
+                        1002 => self.mouse_btn = false,
+                        1006 => self.mouse_sgr = false,
+                        1015 => self.mouse_rxvt = false,
+                        1047 => callback(Event::ScreenBuffer {
+                            alternate: false,
+                            clear: true
+                        }),
+                        1048 => {
+                            self.x = self.save_x;
+                            self.y = self.save_y;
+                        },
+                        1049 => {
+                            self.x = self.save_x;
+                            self.y = self.save_y;
+
+                            callback(Event::ScreenBuffer {
+                                alternate: false,
+                                clear: false,
+                            });
+                        }
                         _ => ()
                     }
 
