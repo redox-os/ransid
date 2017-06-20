@@ -592,7 +592,7 @@ impl Console {
     }
 
     pub fn character<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
-        if c != '\x1B' {
+        if c != '\x1B' && c != '\n' && c != '\r' {
             self.fix_cursor(callback);
         }
 
@@ -637,10 +637,6 @@ impl Console {
 
                 self.x += 1;
             }
-        }
-
-        if ! self.raw_mode {
-            self.fix_cursor(callback);
         }
     }
 
