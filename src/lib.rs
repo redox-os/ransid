@@ -272,11 +272,11 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'B' => {
-                    self.y += cmp::min(self.h - 1 - self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
                     self.escape_sequence = false;
                 },
                 'C' => {
-                    self.x += cmp::min(self.w - 1 - self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.x += cmp::min(self.w.checked_sub(self.x + 1).unwrap_or(0), self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
                     self.escape_sequence = false;
                 },
                 'D' => {
