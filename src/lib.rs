@@ -60,7 +60,6 @@ pub struct Console {
     pub escape_os: bool,
     pub escape_extra: bool,
     pub sequence: Vec<String>,
-    pub raw_mode: bool,
     pub mouse_vt200: bool,
     pub mouse_btn: bool,
     pub mouse_sgr: bool,
@@ -90,25 +89,6 @@ impl Console {
             escape_os: false,
             escape_extra: false,
             sequence: Vec::new(),
-
-            /*
-            @MANSTART{terminal-raw-mode}
-            INTRODUCTION
-                Since Redox has no ioctl syscall, it uses escape codes for switching to raw mode.
-
-            ENTERING AND EXITING RAW MODE
-                Entering raw mode is done using CSI-r (^[?82h). Unsetting raw mode is done by CSI-R (^[?82l).
-
-            RAW MODE
-                Raw mode means that the stdin must be handled solely by the program itself. It will not automatically be printed nor will it be modified in any way (modulo escape codes).
-
-                This means that:
-                    - stdin is not printed.
-                    - newlines are interpreted as carriage returns in stdin.
-                    - stdin is not buffered, meaning that the stream of bytes goes directly to the program, without the user having to press enter.
-            @MANEND
-            */
-            raw_mode: false,
             mouse_vt200: false,
             mouse_btn: false,
             mouse_sgr: false,
@@ -314,10 +294,6 @@ impl Console {
                                 h: self.h - self.y,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         1 => {
                             // Clear previous rows
@@ -337,10 +313,6 @@ impl Console {
                                 h: 1,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         2 => {
                             // Erase all
@@ -355,10 +327,6 @@ impl Console {
                                 h: self.h,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         _ => {}
                     }
@@ -378,10 +346,6 @@ impl Console {
                                 h: 1,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         1 => {
                             // Clear current row to cursor
@@ -392,10 +356,6 @@ impl Console {
                                 h: 1,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         2 => {
                             // Erase row
@@ -406,10 +366,6 @@ impl Console {
                                 h: 1,
                                 color: self.background
                             });
-
-                            if ! self.raw_mode {
-                                self.redraw = true;
-                            }
                         },
                         _ => {}
                     }
@@ -424,7 +380,6 @@ impl Console {
                             alternate: true,
                             clear: false,
                         }),
-                        82 => self.raw_mode = true,
                         1000 => self.mouse_vt200 = true,
                         1002 => self.mouse_btn = true,
                         1006 => self.mouse_sgr = true,
@@ -458,7 +413,6 @@ impl Console {
                             alternate: false,
                             clear: false,
                         }),
-                        82 => self.raw_mode = false,
                         1000 => self.mouse_vt200 = false,
                         1002 => self.mouse_btn = false,
                         1006 => self.mouse_sgr = false,
@@ -566,7 +520,6 @@ impl Console {
                     self.save_x = 0;
                     self.save_y = 0;
                     self.cursor = true;
-                    self.raw_mode = false;
                     self.foreground = Color::ansi(7);
                     self.background = Color::ansi(0);
                     self.bold = false;
@@ -602,10 +555,6 @@ impl Console {
             '\x08' => { // Backspace
                 if self.x >= 1 {
                     self.x -= 1;
-
-                    if ! self.raw_mode {
-                        self.block(' ', callback);
-                    }
                 }
             },
             '\x09' => { // Tab
@@ -614,9 +563,6 @@ impl Console {
             '\x0A' => { // Newline
                 self.x = 0;
                 self.y += 1;
-                if ! self.raw_mode {
-                    self.redraw = true;
-                }
             },
             '\x0B' ... '\x0C' => {} // Ignore
             '\x0D' => { // Carriage Return
