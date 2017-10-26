@@ -30,9 +30,13 @@ pub enum Event<'a> {
         alternate: bool,
         clear: bool,
     },
-    Scroll {
-        rows: usize,
-        color: Color
+    Move {
+        from_x: usize,
+        from_y: usize,
+        to_x: usize,
+        to_y: usize,
+        w: usize,
+        h: usize,
     },
     Title {
         title: String
@@ -46,6 +50,10 @@ pub struct Console {
     pub save_y: usize,
     pub w: usize,
     pub h: usize,
+    pub top_margin: usize,
+    pub bottom_margin: usize,
+    pub g0: char,
+    pub g1: char,
     pub foreground: Color,
     pub background: Color,
     pub bold: bool,
@@ -58,6 +66,8 @@ pub struct Console {
     pub escape: bool,
     pub escape_sequence: bool,
     pub escape_os: bool,
+    pub escape_g0: bool,
+    pub escape_g1: bool,
     pub escape_extra: bool,
     pub sequence: Vec<String>,
     pub mouse_vt200: bool,
@@ -75,6 +85,10 @@ impl Console {
             save_y: 0,
             w: w,
             h: h,
+            top_margin: 0,
+            bottom_margin: cmp::max(0, h as isize - 1) as usize,
+            g0: 'B',
+            g1: '0',
             foreground: Color::ansi(7),
             background: Color::ansi(0),
             bold: false,
@@ -87,6 +101,8 @@ impl Console {
             escape: false,
             escape_sequence: false,
             escape_os: false,
+            escape_g0: false,
+            escape_g1: false,
             escape_extra: false,
             sequence: Vec::new(),
             mouse_vt200: false,
@@ -115,9 +131,40 @@ impl Console {
     }
 
     fn scroll<F: FnMut(Event)>(&self, rows: usize, callback: &mut F) {
-        callback(Event::Scroll {
-            rows: rows,
-            color: self.background
+        //TODO: Use min and max to ensure correct behavior
+        callback(Event::Move {
+            from_x: 0,
+            from_y: self.top_margin + rows,
+            to_x: 0,
+            to_y: self.top_margin,
+            w: self.w,
+            h: (self.bottom_margin + 1) - rows,
+        });
+        callback(Event::Rect {
+            x: 0,
+            y: (self.bottom_margin + 1) - rows,
+            w: self.w,
+            h: rows,
+            color: self.background,
+        });
+    }
+
+    fn reverse_scroll<F: FnMut(Event)>(&self, rows: usize, callback: &mut F) {
+        //TODO: Use min and max to ensure correct behavior
+        callback(Event::Move {
+            from_x: 0,
+            from_y: self.top_margin,
+            to_x: 0,
+            to_y: self.top_margin + rows,
+            w: self.w,
+            h: (self.bottom_margin + 1) - rows,
+        });
+        callback(Event::Rect {
+            x: 0,
+            y: self.top_margin,
+            w: self.w,
+            h: rows,
+            color: self.background,
         });
     }
 
@@ -142,110 +189,13 @@ impl Console {
             match c {
                 '0' ... '9' => {
                     // Add a number to the sequence list
-                    if let Some(mut value) = self.sequence.last_mut() {
+                    if let Some(value) = self.sequence.last_mut() {
                         value.push(c);
                     }
                 },
                 ';' => {
                     // Split sequence into list
                     self.sequence.push(String::new());
-                },
-                'm' => {
-                    // Display attributes
-                    let mut value_iter = self.sequence.iter();
-                    while let Some(value_str) = value_iter.next() {
-                        let value = value_str.parse::<u8>().unwrap_or(0);
-                        match value {
-                            0 => {
-                                self.foreground = Color::ansi(7);
-                                self.background = Color::ansi(0);
-                                self.bold = false;
-                                self.underlined = false;
-                                self.inverted = false;
-                            },
-                            1 => {
-                                self.bold = true;
-                            },
-                            4 => {
-                                self.underlined = true;
-                            },
-                            7 => {
-                                self.inverted = true;
-                            },
-                            21 => {
-                                self.bold = false;
-                            },
-                            24 => {
-                                self.underlined = false;
-                            },
-                            27 => {
-                                self.inverted = false;
-                            },
-                            30 ... 37 => self.foreground = Color::ansi(value - 30),
-                            38 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
-                                2 => {
-                                    //True color
-                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::new(r, g, b);
-                                },
-                                5 => {
-                                    //256 color
-                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::ansi(color_value);
-                                },
-                                _ => {}
-                            },
-                            39 => {
-                                self.foreground = Color::ansi(7);
-                            },
-                            40 ... 47 => self.background = Color::ansi(value - 40),
-                            48 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
-                                2 => {
-                                    //True color
-                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::new(r, g, b);
-                                },
-                                5 => {
-                                    //256 color
-                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::ansi(color_value);
-                                },
-                                _ => {}
-                            },
-                            49 => {
-                                self.background = Color::ansi(0);
-                            },
-                            _ => {},
-                        }
-                    }
-
-                    self.escape_sequence = false;
-                },
-                'n' => {
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        6 => {
-                            let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
-                            callback(Event::Input {
-                                data: &report.into_bytes()
-                            });
-                        },
-                        _ => ()
-                    }
-                    self.escape_sequence = false;
-                },
-                's' => {
-                    self.save_x = self.x;
-                    self.save_y = self.y;
-                    self.escape_sequence = false;
-                },
-                'u' => {
-                    self.x = self.save_x;
-                    self.y = self.save_y;
-                    self.escape_sequence = false;
                 },
                 'A' => {
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
@@ -261,6 +211,21 @@ impl Console {
                 },
                 'D' => {
                     self.x -= cmp::min(self.x, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.escape_sequence = false;
+                },
+                'E' => {
+                    self.x = 1;
+                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.escape_sequence = false;
+                },
+                'F' => {
+                    self.x = 1;
+                    self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.escape_sequence = false;
+                },
+                'G' => {
+                    let col = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
+                    self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
                     self.escape_sequence = false;
                 },
                 'H' | 'f' => {
@@ -372,6 +337,145 @@ impl Console {
 
                     self.escape_sequence = false;
                 },
+                'P' => {
+                    let cols = cmp::max(0, cmp::min(self.w as isize - 1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1))) as usize;
+                    //TODO: Use min and max to ensure correct behavior
+                    callback(Event::Move {
+                        from_x: self.x + cols,
+                        from_y: self.y,
+                        to_x: self.x,
+                        to_y: self.y,
+                        w: self.w - cols,
+                        h: 1,
+                    });
+                    callback(Event::Rect {
+                        x: self.w - cols,
+                        y: self.y,
+                        w: cols,
+                        h: 1,
+                        color: self.background,
+                    });
+                    self.escape_sequence = false;
+                },
+                'S' => {
+                    let rows = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
+                    self.scroll(rows, callback);
+                    self.escape_sequence = false;
+                },
+                'T' => {
+                    let rows = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
+                    self.reverse_scroll(rows, callback);
+                    self.escape_sequence = false;
+                },
+                'd' => {
+                    let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
+                    self.y = cmp::max(0, cmp::min(self.h as isize - 1, row - 1)) as usize;
+                    self.escape_sequence = false;
+                },
+                'm' => {
+                    // Display attributes
+                    let mut value_iter = self.sequence.iter();
+                    while let Some(value_str) = value_iter.next() {
+                        let value = value_str.parse::<u8>().unwrap_or(0);
+                        match value {
+                            0 => {
+                                self.foreground = Color::ansi(7);
+                                self.background = Color::ansi(0);
+                                self.bold = false;
+                                self.underlined = false;
+                                self.inverted = false;
+                            },
+                            1 => {
+                                self.bold = true;
+                            },
+                            4 => {
+                                self.underlined = true;
+                            },
+                            7 => {
+                                self.inverted = true;
+                            },
+                            21 => {
+                                self.bold = false;
+                            },
+                            24 => {
+                                self.underlined = false;
+                            },
+                            27 => {
+                                self.inverted = false;
+                            },
+                            30 ... 37 => self.foreground = Color::ansi(value - 30),
+                            38 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
+                                2 => {
+                                    //True color
+                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    self.foreground = Color::new(r, g, b);
+                                },
+                                5 => {
+                                    //256 color
+                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    self.foreground = Color::ansi(color_value);
+                                },
+                                _ => {}
+                            },
+                            39 => {
+                                self.foreground = Color::ansi(7);
+                            },
+                            40 ... 47 => self.background = Color::ansi(value - 40),
+                            48 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
+                                2 => {
+                                    //True color
+                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    self.background = Color::new(r, g, b);
+                                },
+                                5 => {
+                                    //256 color
+                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
+                                    self.background = Color::ansi(color_value);
+                                },
+                                _ => {}
+                            },
+                            49 => {
+                                self.background = Color::ansi(0);
+                            },
+                            _ => {},
+                        }
+                    }
+
+                    self.escape_sequence = false;
+                },
+                'n' => {
+                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
+                        6 => {
+                            let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
+                            callback(Event::Input {
+                                data: &report.into_bytes()
+                            });
+                        },
+                        _ => ()
+                    }
+                    self.escape_sequence = false;
+                },
+                'r' => {
+                    let top = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
+                    let bottom = self.sequence.get(1).map_or("", |p| &p).parse::<usize>().unwrap_or(self.h);
+                    self.top_margin = cmp::max(0, top as isize - 1) as usize;
+                    self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
+                    self.escape_sequence = false;
+                },
+                's' => {
+                    self.save_x = self.x;
+                    self.save_y = self.y;
+                    self.escape_sequence = false;
+                },
+                'u' => {
+                    self.x = self.save_x;
+                    self.y = self.save_y;
+                    self.escape_sequence = false;
+                },
                 '?' => self.escape_extra = true,
                 'h' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
@@ -439,7 +543,10 @@ impl Console {
 
                     self.escape_sequence = false;
                 },
-                _ => self.escape_sequence = false,
+                _ => {
+                    println!("Unknown escape_sequence {:?} {:?}", self.sequence, c);
+                    self.escape_sequence = false
+                },
             }
 
             if !self.escape_sequence {
@@ -470,14 +577,16 @@ impl Console {
                                 title: title
                             });
                         },
-                        _ => ()
+                        _ => {
+                            println!("Unknown OS command {:?}", self.sequence);
+                        }
                     }
 
                     self.escape_os = false;
                 },
                 _ => {
                     // Add a character to the sequence list
-                    if let Some(mut value) = self.sequence.last_mut() {
+                    if let Some(value) = self.sequence.last_mut() {
                         value.push(c);
                     }
                 },
@@ -485,6 +594,30 @@ impl Console {
 
             if !self.escape_os {
                 self.sequence.clear();
+                self.escape = false;
+                self.escape_extra = false;
+            }
+        } else if self.escape_g0 {
+            match c {
+                _ => {
+                    self.g0 = c;
+                    self.escape_g0 = false;
+                }
+            }
+
+            if !self.escape_g0 {
+                self.escape = false;
+                self.escape_extra = false;
+            }
+        } else if self.escape_g1 {
+            match c {
+                _ => {
+                    self.g1 = c;
+                    self.escape_g1 = false;
+                }
+            }
+
+            if !self.escape_g1 {
                 self.escape = false;
                 self.escape_extra = false;
             }
@@ -501,6 +634,28 @@ impl Console {
 
                     self.escape_os = true;
                     self.sequence.push(String::new());
+                },
+                '(' => {
+                    self.escape_g0 = true;
+                },
+                ')' => {
+                    self.escape_g1 = true;
+                },
+                'D' => {
+                    self.x = 0;
+                    self.escape = false;
+                },
+                'E' => {
+                    self.y += 1;
+                    self.escape = false;
+                },
+                'M' => {
+                    while self.y <= 0 {
+                        self.reverse_scroll(1, callback);
+                        self.y += 1;
+                    }
+                    self.y -= 1;
+                    self.escape = false;
                 },
                 '7' => {
                     // Save
@@ -519,7 +674,11 @@ impl Console {
                     self.y = 0;
                     self.save_x = 0;
                     self.save_y = 0;
+                    self.top_margin = 0;
+                    self.bottom_margin = cmp::max(0, self.h as isize - 1) as usize;
                     self.cursor = true;
+                    self.g0 = 'B';
+                    self.g1 = '0';
                     self.foreground = Color::ansi(7);
                     self.background = Color::ansi(0);
                     self.bold = false;
@@ -538,8 +697,11 @@ impl Console {
                     self.redraw = true;
 
                     self.escape = false;
+                },
+                _ => {
+                    println!("Unknown escape {:?}", c);
+                    self.escape = false;
                 }
-                _ => self.escape = false,
             }
         }
     }
@@ -584,6 +746,8 @@ impl Console {
                 self.x += 1;
             }
         }
+
+        self.fix_cursor(callback);
     }
 
     pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
