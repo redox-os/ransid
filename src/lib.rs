@@ -89,8 +89,8 @@ impl Console {
             bottom_margin: cmp::max(0, h as isize - 1) as usize,
             g0: 'B',
             g1: '0',
-            foreground: Color::ansi(7),
-            background: Color::ansi(0),
+            foreground: Color::Ansi(7),
+            background: Color::Ansi(0),
             bold: false,
             inverted: false,
             underlined: false,
@@ -379,8 +379,8 @@ impl Console {
                         let value = value_str.parse::<u8>().unwrap_or(0);
                         match value {
                             0 => {
-                                self.foreground = Color::ansi(7);
-                                self.background = Color::ansi(0);
+                                self.foreground = Color::Ansi(7);
+                                self.background = Color::Ansi(0);
                                 self.bold = false;
                                 self.underlined = false;
                                 self.inverted = false;
@@ -403,43 +403,43 @@ impl Console {
                             27 => {
                                 self.inverted = false;
                             },
-                            30 ... 37 => self.foreground = Color::ansi(value - 30),
+                            30 ... 37 => self.foreground = Color::Ansi(value - 30),
                             38 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
                                 2 => {
                                     //True color
                                     let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
                                     let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
                                     let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::new(r, g, b);
+                                    self.foreground = Color::TrueColor(r, g, b);
                                 },
                                 5 => {
                                     //256 color
                                     let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::ansi(color_value);
+                                    self.foreground = Color::Ansi(color_value);
                                 },
                                 _ => {}
                             },
                             39 => {
-                                self.foreground = Color::ansi(7);
+                                self.foreground = Color::Ansi(7);
                             },
-                            40 ... 47 => self.background = Color::ansi(value - 40),
+                            40 ... 47 => self.background = Color::Ansi(value - 40),
                             48 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
                                 2 => {
                                     //True color
                                     let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
                                     let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
                                     let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::new(r, g, b);
+                                    self.background = Color::TrueColor(r, g, b);
                                 },
                                 5 => {
                                     //256 color
                                     let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::ansi(color_value);
+                                    self.background = Color::Ansi(color_value);
                                 },
                                 _ => {}
                             },
                             49 => {
-                                self.background = Color::ansi(0);
+                                self.background = Color::Ansi(0);
                             },
                             _ => {},
                         }
@@ -679,8 +679,8 @@ impl Console {
                     self.cursor = true;
                     self.g0 = 'B';
                     self.g1 = '0';
-                    self.foreground = Color::ansi(7);
-                    self.background = Color::ansi(0);
+                    self.foreground = Color::Ansi(7);
+                    self.background = Color::Ansi(0);
                     self.bold = false;
                     self.inverted = false;
                     self.underlined = false;
