@@ -2,7 +2,7 @@
 name = "ransid"
 description = "Rust ANSI Driver"
 repository = "https://github.com/jackpot51/ransid"
-version = "0.3.0"
+version = "0.3.1"
 license-file = "LICENSE"
 readme = "README.md"
 keywords = ["redox", "ansi"]
