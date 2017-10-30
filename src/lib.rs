@@ -68,6 +68,7 @@ pub struct Console {
     pub escape_os: bool,
     pub escape_g0: bool,
     pub escape_g1: bool,
+    pub escape_size: bool,
     pub escape_extra: bool,
     pub sequence: Vec<String>,
     pub mouse_vt200: bool,
@@ -103,6 +104,7 @@ impl Console {
             escape_os: false,
             escape_g0: false,
             escape_g1: false,
+            escape_size: false,
             escape_extra: false,
             sequence: Vec::new(),
             mouse_vt200: false,
@@ -187,15 +189,15 @@ impl Console {
     pub fn code<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
         if self.escape_sequence {
             match c {
-                '0' ... '9' => {
+                ';' => {
+                    // Split sequence into list
+                    self.sequence.push(String::new());
+                },
+                '\0' ... '>' => {
                     // Add a number to the sequence list
                     if let Some(value) = self.sequence.last_mut() {
                         value.push(c);
                     }
-                },
-                ';' => {
-                    // Split sequence into list
-                    self.sequence.push(String::new());
                 },
                 'A' => {
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
@@ -607,7 +609,6 @@ impl Console {
 
             if !self.escape_g0 {
                 self.escape = false;
-                self.escape_extra = false;
             }
         } else if self.escape_g1 {
             match c {
@@ -619,8 +620,17 @@ impl Console {
 
             if !self.escape_g1 {
                 self.escape = false;
-                self.escape_extra = false;
             }
+        } else if self.escape_size {
+                match c {
+                    _ => {
+                        self.escape_size = false;
+                    }
+                }
+
+                if !self.escape_size {
+                    self.escape = false;
+                }
         } else {
             match c {
                 '[' => {
@@ -640,6 +650,9 @@ impl Console {
                 },
                 ')' => {
                     self.escape_g1 = true;
+                },
+                '#' => {
+                    self.escape_size = true;
                 },
                 'D' => {
                     self.x = 0;
