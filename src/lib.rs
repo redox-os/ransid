@@ -193,12 +193,6 @@ impl Console {
                     // Split sequence into list
                     self.sequence.push(String::new());
                 },
-                '\0' ... '>' => {
-                    // Add a number to the sequence list
-                    if let Some(value) = self.sequence.last_mut() {
-                        value.push(c);
-                    }
-                },
                 'A' => {
                     self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
                     self.escape_sequence = false;
@@ -545,9 +539,15 @@ impl Console {
 
                     self.escape_sequence = false;
                 },
-                _ => {
+                '@' ... '~' => {
                     println!("Unknown escape_sequence {:?} {:?}", self.sequence, c);
                     self.escape_sequence = false
+                },
+                _ => {
+                    // Add a number to the sequence list
+                    if let Some(value) = self.sequence.last_mut() {
+                        value.push(c);
+                    }
                 },
             }
 
