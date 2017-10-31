@@ -821,7 +821,9 @@ impl Console {
         }
 
         match c {
-            '\x00' ... '\x06' => {}, // Ignore
+            '\x00' ... '\x06' => { // Ignore
+                println!("Ignored character {:?}", c);
+            },
             '\x07' => {}, // FIXME: Add bell
             '\x08' => { // Backspace
                 if self.x >= 1 {
@@ -835,15 +837,21 @@ impl Console {
                 self.x = 0;
                 self.y += 1;
             },
-            '\x0B' ... '\x0C' => {} // Ignore
+            '\x0B' ... '\x0C' => { // Ignore
+                println!("Ignored character {:?}", c);
+            },
             '\x0D' => { // Carriage Return
                 self.x = 0;
             },
-            '\x0E' ... '\x1A' => {} // Ignore
+            '\x0E' ... '\x1A' => { // Ignore
+                println!("Ignored character {:?}", c);
+            },
             '\x1B' => { // Escape
                 self.escape = true;
             },
-            '\x1C' ... '\x1F' => {} // Ignore
+            '\x1C' ... '\x1F' => { // Ignore
+                println!("Ignored character {:?}", c);
+            },
             ' ' => { // Space
                 self.block(' ', callback);
 
@@ -903,7 +911,7 @@ impl Console {
             };
 
             if let Some(c) = c_opt {
-                if self.escape && c > '\x1F' {
+                if self.escape && (c < '\x08' || c > '\x0D') {
                     self.code(c, &mut callback);
                 } else {
                     self.character(c, &mut callback);
