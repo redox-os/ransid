@@ -507,6 +507,8 @@ impl Console {
                 'h' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         3 => {
+                            self.x = 0;
+                            self.y = 0;
                             self.top_margin = 0;
                             self.bottom_margin = self.h;
 
@@ -557,6 +559,8 @@ impl Console {
                 'l' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         3 => {
+                            self.x = 0;
+                            self.y = 0;
                             self.top_margin = 0;
                             self.bottom_margin = self.h;
 
@@ -899,7 +903,7 @@ impl Console {
             };
 
             if let Some(c) = c_opt {
-                if self.escape {
+                if self.escape && c > '\x1F' {
                     self.code(c, &mut callback);
                 } else {
                     self.character(c, &mut callback);
