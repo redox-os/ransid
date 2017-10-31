@@ -162,6 +162,7 @@ impl State {
 
         if self.x >= w {
             if self.autowrap {
+                println!("Autowrap");
                 self.x = 0;
                 self.y += 1;
             } else {
@@ -739,11 +740,10 @@ impl State {
         }
     }
 
-    pub fn esc<F: FnMut(Event)>(&mut self, c: char, _params: &[i64], _intermediates: &[u8], callback: &mut F) {
+    pub fn esc<F: FnMut(Event)>(&mut self, c: char, _params: &[i64], intermediates: &[u8], callback: &mut F) {
         match c {
             //'(' => {},
             //')' => {},
-            //'#' => {},
             'D' => {
                 self.x = 0;
             },
@@ -763,8 +763,41 @@ impl State {
                 self.save_y = self.y;
             },
             '8' => {
-                self.x = self.save_x;
-                self.y = self.save_y;
+                match intermediates.get(0).map(|v| *v as char) {
+                    Some('#') => {
+                        // Test pattern
+                        for x in 10..70 {
+                            self.x = x;
+
+                            self.y = 8;
+                            self.block('E', callback);
+
+                            self.y = 15;
+                            self.block('E', callback);
+                        }
+
+                        for y in 9..15 {
+                            self.y = y;
+
+                            self.x = 10;
+                            self.block('E', callback);
+
+                            self.x = 69;
+                            self.block('E', callback);
+                        }
+
+                        self.x = 0;
+                        self.y = 0;
+                    },
+                    Some(inter) => {
+                        println!("Unknown ESC {:?} intermediate {:?}", c, inter);
+                    },
+                    None => {
+                        // Restore
+                        self.x = self.save_x;
+                        self.y = self.save_y;
+                    }
+                }
             },
             'c' => {
                 // Reset
@@ -795,7 +828,7 @@ impl State {
                 self.redraw = true;
             },
             _ => {
-                println!("Unknown escape {:?}", c);
+                println!("Unknown ESC {:?}", c);
             }
         }
     }
@@ -831,7 +864,7 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]]) {
-        println!("[csi_dispatch] params={:?}", params);
+        println!("[osc_dispatch] params={:?}", params);
     }
 
     fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
