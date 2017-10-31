@@ -1,6 +1,8 @@
 #![crate_name="ransid"]
 #![crate_type="lib"]
 
+extern crate vte;
+
 use std::{char, cmp};
 
 pub use color::Color;
@@ -43,7 +45,7 @@ pub enum Event<'a> {
     }
 }
 
-pub struct Console {
+pub struct State {
     pub x: usize,
     pub y: usize,
     pub save_x: usize,
@@ -61,16 +63,6 @@ pub struct Console {
     pub underlined: bool,
     pub cursor: bool,
     pub redraw: bool,
-    pub utf_data: u32,
-    pub utf_step: u32,
-    pub escape: bool,
-    pub escape_sequence: bool,
-    pub escape_os: bool,
-    pub escape_g0: bool,
-    pub escape_g1: bool,
-    pub escape_screen: bool,
-    pub escape_extra: bool,
-    pub sequence: Vec<String>,
     pub origin: bool,
     pub autowrap: bool,
     pub mouse_vt200: bool,
@@ -79,9 +71,9 @@ pub struct Console {
     pub mouse_rxvt: bool,
 }
 
-impl Console {
-    pub fn new(w: usize, h: usize) -> Console {
-        Console {
+impl State {
+    pub fn new(w: usize, h: usize) -> State {
+        State {
             x: 0,
             y: 0,
             save_x: 0,
@@ -99,16 +91,6 @@ impl Console {
             underlined: false,
             cursor: true,
             redraw: true,
-            utf_data: 0,
-            utf_step: 0,
-            escape: false,
-            escape_sequence: false,
-            escape_os: false,
-            escape_g0: false,
-            escape_g1: false,
-            escape_screen: false,
-            escape_extra: false,
-            sequence: Vec::new(),
             origin: false,
             autowrap: true,
             mouse_vt200: false,
@@ -194,314 +176,13 @@ impl Console {
         }
     }
 
+    /*
     pub fn code<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
         if self.escape_sequence {
             match c {
                 ';' => {
                     // Split sequence into list
                     self.sequence.push(String::new());
-                },
-                'A' => {
-                    self.y -= cmp::min(self.y, cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'B' => {
-                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'C' => {
-                    self.x += cmp::min(self.w.checked_sub(self.x + 1).unwrap_or(0), cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'D' => {
-                    self.x -= cmp::min(self.x, cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'E' => {
-                    self.x = 0;
-                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'F' => {
-                    self.x = 0;
-                    self.y -= cmp::min(self.y, cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
-                    self.escape_sequence = false;
-                },
-                'G' => {
-                    let col = cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
-                    self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
-                    self.escape_sequence = false;
-                },
-                'H' | 'f' => {
-                    let row = cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
-                    self.y = cmp::max(0, cmp::min(self.h as isize - 1, row - 1)) as usize;
-
-                    let col = cmp::max(1, self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
-                    self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
-
-                    self.escape_sequence = false;
-                },
-                'J' => {
-                    self.fix_cursor(callback);
-
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        1 => {
-                            // Clear previous rows
-                            callback(Event::Rect {
-                                x: 0,
-                                y: 0,
-                                w: self.w,
-                                h: self.y,
-                                color: self.background
-                            });
-
-                            // Clear current row to cursor
-                            callback(Event::Rect {
-                                x: 0,
-                                y: self.y,
-                                w: self.x,
-                                h: 1,
-                                color: self.background
-                            });
-                        },
-                        2 => {
-                            // Erase all
-                            self.x = 0;
-                            self.y = 0;
-
-                            // Clear all rows
-                            callback(Event::Rect {
-                                x: 0,
-                                y: 0,
-                                w: self.w,
-                                h: self.h,
-                                color: self.background
-                            });
-                        },
-                        3 => {
-                            // Erase all
-                            self.x = 0;
-                            self.y = 0;
-
-                            // Clear all rows
-                            callback(Event::Rect {
-                                x: 0,
-                                y: 0,
-                                w: self.w,
-                                h: self.h,
-                                color: self.background
-                            });
-                        },
-                        _ => {
-                            // Clear current row from cursor
-                            callback(Event::Rect {
-                                x: self.x,
-                                y: self.y,
-                                w: self.w - self.x,
-                                h: 1,
-                                color: self.background
-                            });
-
-                            // Clear following rows
-                            callback(Event::Rect {
-                                x: 0,
-                                y: self.y,
-                                w: self.w,
-                                h: self.h - self.y,
-                                color: self.background
-                            });
-                        }
-                    }
-
-                    self.escape_sequence = false;
-                },
-                'K' => {
-                    self.fix_cursor(callback);
-
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        1 => {
-                            // Clear current row to cursor
-                            callback(Event::Rect {
-                                x: 0,
-                                y: self.y,
-                                w: self.x,
-                                h: 1,
-                                color: self.background
-                            });
-                        },
-                        2 => {
-                            // Erase row
-                            callback(Event::Rect {
-                                x: 0,
-                                y: self.y,
-                                w: self.w,
-                                h: 1,
-                                color: self.background
-                            });
-                        },
-                        _ => {
-                            // Clear current row from cursor
-                            callback(Event::Rect {
-                                x: self.x,
-                                y: self.y,
-                                w: self.w - self.x,
-                                h: 1,
-                                color: self.background
-                            });
-                        },
-                    }
-
-                    self.escape_sequence = false;
-                },
-                'P' => {
-                    let cols = cmp::max(0, cmp::min(self.w as isize - 1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1))) as usize;
-                    //TODO: Use min and max to ensure correct behavior
-                    callback(Event::Move {
-                        from_x: self.x + cols,
-                        from_y: self.y,
-                        to_x: self.x,
-                        to_y: self.y,
-                        w: self.w - cols,
-                        h: 1,
-                    });
-                    callback(Event::Rect {
-                        x: self.w - cols,
-                        y: self.y,
-                        w: cols,
-                        h: 1,
-                        color: self.background,
-                    });
-                    self.escape_sequence = false;
-                },
-                'S' => {
-                    let rows = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
-                    self.scroll(rows, callback);
-                    self.escape_sequence = false;
-                },
-                'T' => {
-                    let rows = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
-                    self.reverse_scroll(rows, callback);
-                    self.escape_sequence = false;
-                },
-                'c' => {
-                    let report = format!("\x1B[?6c");
-                    callback(Event::Input {
-                        data: &report.into_bytes()
-                    });
-                    self.escape_sequence = false;
-                },
-                'd' => {
-                    let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
-                    self.y = cmp::max(0, cmp::min(self.h as isize - 1, row - 1)) as usize;
-                    self.escape_sequence = false;
-                },
-                'm' => {
-                    // Display attributes
-                    let mut value_iter = self.sequence.iter();
-                    while let Some(value_str) = value_iter.next() {
-                        let value = value_str.parse::<u8>().unwrap_or(0);
-                        match value {
-                            0 => {
-                                self.foreground = Color::Ansi(7);
-                                self.background = Color::Ansi(0);
-                                self.bold = false;
-                                self.underlined = false;
-                                self.inverted = false;
-                            },
-                            1 => {
-                                self.bold = true;
-                            },
-                            4 => {
-                                self.underlined = true;
-                            },
-                            7 => {
-                                self.inverted = true;
-                            },
-                            21 => {
-                                self.bold = false;
-                            },
-                            24 => {
-                                self.underlined = false;
-                            },
-                            27 => {
-                                self.inverted = false;
-                            },
-                            30 ... 37 => self.foreground = Color::Ansi(value - 30),
-                            38 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
-                                2 => {
-                                    //True color
-                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::TrueColor(r, g, b);
-                                },
-                                5 => {
-                                    //256 color
-                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.foreground = Color::Ansi(color_value);
-                                },
-                                _ => {}
-                            },
-                            39 => {
-                                self.foreground = Color::Ansi(7);
-                            },
-                            40 ... 47 => self.background = Color::Ansi(value - 40),
-                            48 => match value_iter.next().map_or("", |s| &s).parse::<usize>().unwrap_or(0) {
-                                2 => {
-                                    //True color
-                                    let r = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let g = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    let b = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::TrueColor(r, g, b);
-                                },
-                                5 => {
-                                    //256 color
-                                    let color_value = value_iter.next().map_or("", |s| &s).parse::<u8>().unwrap_or(0);
-                                    self.background = Color::Ansi(color_value);
-                                },
-                                _ => {}
-                            },
-                            49 => {
-                                self.background = Color::Ansi(0);
-                            },
-                            _ => {
-                                println!("Unknown mode {:?}", value);
-                            },
-                        }
-                    }
-
-                    self.escape_sequence = false;
-                },
-                'n' => {
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        6 => {
-                            let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
-                            callback(Event::Input {
-                                data: &report.into_bytes()
-                            });
-                        },
-                        unknown => {
-                            println!("Unknown status request {:?}", unknown);
-                        }
-                    }
-                    self.escape_sequence = false;
-                },
-                'r' => {
-                    let top = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
-                    let bottom = self.sequence.get(1).map_or("", |p| &p).parse::<usize>().unwrap_or(self.h);
-                    self.top_margin = cmp::max(0, top as isize - 1) as usize;
-                    self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
-                    self.escape_sequence = false;
-                },
-                's' => {
-                    self.save_x = self.x;
-                    self.save_y = self.y;
-                    self.escape_sequence = false;
-                },
-                'u' => {
-                    self.x = self.save_x;
-                    self.y = self.save_y;
-                    self.escape_sequence = false;
                 },
                 '?' => self.escape_extra = true,
                 'h' if self.escape_extra => {
@@ -728,103 +409,20 @@ impl Console {
                     self.escape = false;
                 }
         } else {
-            match c {
-                '[' => {
-                    // Control sequence initiator
 
-                    self.escape_sequence = true;
-                    self.sequence.push(String::new());
-                },
-                ']' => {
-                    // Operating system command
-
-                    self.escape_os = true;
-                    self.sequence.push(String::new());
-                },
-                '(' => {
-                    self.escape_g0 = true;
-                },
-                ')' => {
-                    self.escape_g1 = true;
-                },
-                '#' => {
-                    self.escape_screen = true;
-                },
-                'D' => {
-                    self.x = 0;
-                    self.escape = false;
-                },
-                'E' => {
-                    self.y += 1;
-                    self.escape = false;
-                },
-                'M' => {
-                    while self.y <= 0 {
-                        self.reverse_scroll(1, callback);
-                        self.y += 1;
-                    }
-                    self.y -= 1;
-                    self.escape = false;
-                },
-                '7' => {
-                    // Save
-                    self.save_x = self.x;
-                    self.save_y = self.y;
-                    self.escape = false;
-                },
-                '8' => {
-                    self.x = self.save_x;
-                    self.y = self.save_y;
-                    self.escape = false;
-                },
-                'c' => {
-                    // Reset
-                    self.x = 0;
-                    self.y = 0;
-                    self.save_x = 0;
-                    self.save_y = 0;
-                    self.top_margin = 0;
-                    self.bottom_margin = cmp::max(0, self.h as isize - 1) as usize;
-                    self.cursor = true;
-                    self.g0 = 'B';
-                    self.g1 = '0';
-                    self.foreground = Color::Ansi(7);
-                    self.background = Color::Ansi(0);
-                    self.bold = false;
-                    self.inverted = false;
-                    self.underlined = false;
-
-                    // Clear screen
-                    callback(Event::Rect {
-                        x: 0,
-                        y: 0,
-                        w: self.w,
-                        h: self.h,
-                        color: self.background
-                    });
-
-                    self.redraw = true;
-
-                    self.escape = false;
-                },
-                _ => {
-                    println!("Unknown escape {:?}", c);
-                    self.escape = false;
-                }
-            }
         }
     }
+    */
 
-    pub fn character<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
-        if c != '\x1B' && c != '\n' && c != '\r' {
-            self.fix_cursor(callback);
-        }
+    pub fn print<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
+        self.fix_cursor(callback);
+        self.block(c, callback);
+        self.x += 1;
+    }
 
+    pub fn execute<F: FnMut(Event)>(&mut self, c: char, _callback: &mut F) {
         match c {
-            '\x00' ... '\x06' => { // Ignore
-                println!("Ignored character {:?}", c);
-            },
-            '\x07' => {}, // FIXME: Add bell
+            //'\x07' => {}, // FIXME: Add bell
             '\x08' => { // Backspace
                 if self.x >= 1 {
                     self.x -= 1;
@@ -837,38 +435,438 @@ impl Console {
                 self.x = 0;
                 self.y += 1;
             },
-            '\x0B' ... '\x0C' => { // Ignore
-                println!("Ignored character {:?}", c);
-            },
             '\x0D' => { // Carriage Return
                 self.x = 0;
             },
-            '\x0E' ... '\x1A' => { // Ignore
-                println!("Ignored character {:?}", c);
-            },
-            '\x1B' => { // Escape
-                self.escape = true;
-            },
-            '\x1C' ... '\x1F' => { // Ignore
-                println!("Ignored character {:?}", c);
-            },
-            ' ' => { // Space
-                self.block(' ', callback);
-
-                self.x += 1;
-            },
             _ => {
-                self.block(c, callback);
-
-                self.x += 1;
+                println!("Unknown execute {:?}", c);
             }
         }
+    }
 
-        self.fix_cursor(callback);
+    pub fn csi<F: FnMut(Event)>(&mut self, c: char, params: &[i64], _intermediates: &[u8], callback: &mut F) {
+        match c {
+            'A' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.y -= cmp::min(self.y, cmp::max(1, param) as usize);
+            },
+            'B' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, param) as usize);
+            },
+            'C' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.x += cmp::min(self.w.checked_sub(self.x + 1).unwrap_or(0), cmp::max(1, param) as usize);
+            },
+            'D' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.x -= cmp::min(self.x, cmp::max(1, param) as usize);
+            },
+            'E' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.x = 0;
+                self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, param) as usize);
+            },
+            'F' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.x = 0;
+                self.y -= cmp::min(self.y, cmp::max(1, param) as usize);
+            },
+            'G' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let col = cmp::max(1, param);
+                self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
+            },
+            'H' | 'f' => {
+                {
+                    let param = params.get(0).map(|v| *v).unwrap_or(1);
+                    let row = cmp::max(1, param);
+                    self.y = cmp::max(0, cmp::min(self.h as i64 - 1, row - 1)) as usize;
+                }
+
+                {
+                    let param = params.get(1).map(|v| *v).unwrap_or(1);
+                    let col = cmp::max(1, param);
+                    self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
+                }
+            },
+            'J' => {
+                self.fix_cursor(callback);
+
+                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                match param {
+                    0 => {
+                        // Clear current row from cursor
+                        callback(Event::Rect {
+                            x: self.x,
+                            y: self.y,
+                            w: self.w - self.x,
+                            h: 1,
+                            color: self.background
+                        });
+
+                        // Clear following rows
+                        callback(Event::Rect {
+                            x: 0,
+                            y: self.y,
+                            w: self.w,
+                            h: self.h - self.y,
+                            color: self.background
+                        });
+                    },
+                    1 => {
+                        // Clear previous rows
+                        callback(Event::Rect {
+                            x: 0,
+                            y: 0,
+                            w: self.w,
+                            h: self.y,
+                            color: self.background
+                        });
+
+                        // Clear current row to cursor
+                        callback(Event::Rect {
+                            x: 0,
+                            y: self.y,
+                            w: self.x,
+                            h: 1,
+                            color: self.background
+                        });
+                    },
+                    2 => {
+                        // Erase all
+                        self.x = 0;
+                        self.y = 0;
+
+                        // Clear all rows
+                        callback(Event::Rect {
+                            x: 0,
+                            y: 0,
+                            w: self.w,
+                            h: self.h,
+                            color: self.background
+                        });
+                    },
+                    _ => {
+                        println!("Unknown CSI {:?} param {:?}", c, param);
+                    }
+                }
+            },
+            'K' => {
+                self.fix_cursor(callback);
+
+                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                match param {
+                    0 => {
+                        // Clear current row from cursor
+                        callback(Event::Rect {
+                            x: self.x,
+                            y: self.y,
+                            w: self.w - self.x,
+                            h: 1,
+                            color: self.background
+                        });
+                    },
+                    1 => {
+                        // Clear current row to cursor
+                        callback(Event::Rect {
+                            x: 0,
+                            y: self.y,
+                            w: self.x,
+                            h: 1,
+                            color: self.background
+                        });
+                    },
+                    2 => {
+                        // Erase row
+                        callback(Event::Rect {
+                            x: 0,
+                            y: self.y,
+                            w: self.w,
+                            h: 1,
+                            color: self.background
+                        });
+                    },
+                    _ => {
+                        println!("Unknown CSI {:?} param {:?}", c, param);
+                    }
+                }
+            },
+            'P' => {
+                //TODO: Fix
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let cols = cmp::max(0, cmp::min(self.w as i64 - 1, param)) as usize;
+                //TODO: Use min and max to ensure correct behavior
+                callback(Event::Move {
+                    from_x: self.x + cols,
+                    from_y: self.y,
+                    to_x: self.x,
+                    to_y: self.y,
+                    w: self.w - cols,
+                    h: 1,
+                });
+                callback(Event::Rect {
+                    x: self.w - cols,
+                    y: self.y,
+                    w: cols,
+                    h: 1,
+                    color: self.background,
+                });
+            },
+            'S' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);;
+                self.scroll(cmp::max(0, param) as usize, callback);
+            },
+            'T' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                self.reverse_scroll(cmp::max(0, param) as usize, callback);
+            },
+            'c' => {
+                let report = format!("\x1B[?6c");
+                callback(Event::Input {
+                    data: &report.into_bytes()
+                });
+            },
+            'd' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);;
+                self.y = cmp::max(0, cmp::min(self.h as i64 - 1, param - 1)) as usize;
+            },
+            'n' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                match param {
+                    6 => {
+                        let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
+                        callback(Event::Input {
+                            data: &report.into_bytes()
+                        });
+                    },
+                    _ => {
+                        println!("Unknown CSI {:?} param {:?}", c, param);
+                    }
+                }
+            },
+            'r' => {
+                let top = params.get(0).map(|v| *v).unwrap_or(1);
+                let bottom = params.get(1).map(|v| *v).unwrap_or(self.h as i64);
+                self.top_margin = cmp::max(0, top as isize - 1) as usize;
+                self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
+            },
+            's' => {
+                self.save_x = self.x;
+                self.save_y = self.y;
+            },
+            'u' => {
+                self.x = self.save_x;
+                self.y = self.save_y;
+            },
+            'm' => {
+                // Display attributes
+                let mut value_iter = params.iter();
+                while let Some(value) = value_iter.next() {
+                    match *value {
+                        0 => {
+                            self.foreground = Color::Ansi(7);
+                            self.background = Color::Ansi(0);
+                            self.bold = false;
+                            self.underlined = false;
+                            self.inverted = false;
+                        },
+                        1 => {
+                            self.bold = true;
+                        },
+                        4 => {
+                            self.underlined = true;
+                        },
+                        7 => {
+                            self.inverted = true;
+                        },
+                        21 => {
+                            self.bold = false;
+                        },
+                        24 => {
+                            self.underlined = false;
+                        },
+                        27 => {
+                            self.inverted = false;
+                        },
+                        30 ... 37 => self.foreground = Color::Ansi(*value as u8 - 30),
+                        38 => match value_iter.next().map(|v| *v).unwrap_or(0) {
+                            2 => {
+                                //True color
+                                let r = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let g = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let b = value_iter.next().map(|v| *v).unwrap_or(0);
+                                self.foreground = Color::TrueColor(r as u8, g as u8, b as u8);
+                            },
+                            5 => {
+                                //256 color
+                                let color_value = value_iter.next().map(|v| *v).unwrap_or(0);
+                                self.foreground = Color::Ansi(color_value as u8);
+                            },
+                            _ => {}
+                        },
+                        39 => {
+                            self.foreground = Color::Ansi(7);
+                        },
+                        40 ... 47 => self.background = Color::Ansi(*value as u8 - 40),
+                        48 => match value_iter.next().map(|v| *v).unwrap_or(0) {
+                            2 => {
+                                //True color
+                                let r = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let g = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let b = value_iter.next().map(|v| *v).unwrap_or(0);
+                                self.background = Color::TrueColor(r as u8, g as u8, b as u8);
+                            },
+                            5 => {
+                                //256 color
+                                let color_value = value_iter.next().map(|v| *v).unwrap_or(0);
+                                self.background = Color::Ansi(color_value as u8);
+                            },
+                            _ => {}
+                        },
+                        49 => {
+                            self.background = Color::Ansi(0);
+                        },
+                        _ => {
+                            println!("Unknown CSI {:?} param {:?}", c, value);
+                        },
+                    }
+                }
+            },
+            _ => {
+                println!("Unknown CSI {:?}", c);
+            }
+        }
+    }
+
+    pub fn esc<F: FnMut(Event)>(&mut self, c: char, _params: &[i64], _intermediates: &[u8], callback: &mut F) {
+        match c {
+            //'(' => {},
+            //')' => {},
+            //'#' => {},
+            'D' => {
+                self.x = 0;
+            },
+            'E' => {
+                self.y += 1;
+            },
+            'M' => {
+                while self.y <= 0 {
+                    self.reverse_scroll(1, callback);
+                    self.y += 1;
+                }
+                self.y -= 1;
+            },
+            '7' => {
+                // Save
+                self.save_x = self.x;
+                self.save_y = self.y;
+            },
+            '8' => {
+                self.x = self.save_x;
+                self.y = self.save_y;
+            },
+            'c' => {
+                // Reset
+                self.x = 0;
+                self.y = 0;
+                self.save_x = 0;
+                self.save_y = 0;
+                self.top_margin = 0;
+                self.bottom_margin = cmp::max(0, self.h as isize - 1) as usize;
+                self.cursor = true;
+                self.g0 = 'B';
+                self.g1 = '0';
+                self.foreground = Color::Ansi(7);
+                self.background = Color::Ansi(0);
+                self.bold = false;
+                self.inverted = false;
+                self.underlined = false;
+
+                // Clear screen
+                callback(Event::Rect {
+                    x: 0,
+                    y: 0,
+                    w: self.w,
+                    h: self.h,
+                    color: self.background
+                });
+
+                self.redraw = true;
+            },
+            _ => {
+                println!("Unknown escape {:?}", c);
+            }
+        }
+    }
+}
+
+pub struct Performer<'a, F: FnMut(Event) + 'a> {
+    state: &'a mut State,
+    callback: &'a mut F,
+}
+
+impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
+    fn print(&mut self, c: char) {
+        println!("[print] {:?}", c);
+        self.state.print(c, self.callback);
+    }
+
+    fn execute(&mut self, byte: u8) {
+        println!("[execute] {:02x}", byte);
+        self.state.execute(byte as char, self.callback);
+    }
+
+    fn hook(&mut self, params: &[i64], intermediates: &[u8], ignore: bool) {
+        println!("[hook] params={:?}, intermediates={:?}, ignore={:?}",
+                 params, intermediates, ignore);
+    }
+
+    fn put(&mut self, byte: u8) {
+        println!("[put] {:02x}", byte);
+    }
+
+    fn unhook(&mut self) {
+        println!("[unhook]");
+    }
+
+    fn osc_dispatch(&mut self, params: &[&[u8]]) {
+        println!("[csi_dispatch] params={:?}", params);
+    }
+
+    fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
+        println!("[csi_dispatch] params={:?}, intermediates={:?}, ignore={:?}, char={:?}",
+                 params, intermediates, ignore, c);
+        self.state.csi(c, params, intermediates, self.callback);
+    }
+
+    fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, byte: u8) {
+        println!("[esc_dispatch] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x}",
+                 params, intermediates, ignore, byte);
+        self.state.esc(byte as char, params, intermediates, self.callback);
+    }
+}
+
+pub struct Console {
+    pub parser: vte::Parser,
+    pub state: State,
+}
+
+impl Console {
+    pub fn new(w: usize, h: usize) -> Console {
+        Console {
+            parser: vte::Parser::new(),
+            state: State::new(w, h),
+        }
     }
 
     pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
         for byte in bytes.iter() {
+            self.parser.advance(&mut Performer {
+                state: &mut self.state,
+                callback: &mut callback,
+            }, *byte);
+            /*
             let c_opt = match *byte {
                 //ASCII
                 0b00000000 ... 0b01111111 => {
@@ -917,6 +915,7 @@ impl Console {
                     self.character(c, &mut callback);
                 }
             }
+            */
         };
     }
 }

@@ -11,3 +11,6 @@ authors = ["Jeremy Soller <jackpot51@gmail.com>"]
 [lib]
 name = "ransid"
 path = "src/lib.rs"
+
+[dependencies]
+vte = "0.3"
