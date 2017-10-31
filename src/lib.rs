@@ -68,9 +68,11 @@ pub struct Console {
     pub escape_os: bool,
     pub escape_g0: bool,
     pub escape_g1: bool,
-    pub escape_size: bool,
+    pub escape_screen: bool,
     pub escape_extra: bool,
     pub sequence: Vec<String>,
+    pub origin: bool,
+    pub autowrap: bool,
     pub mouse_vt200: bool,
     pub mouse_btn: bool,
     pub mouse_sgr: bool,
@@ -104,9 +106,11 @@ impl Console {
             escape_os: false,
             escape_g0: false,
             escape_g1: false,
-            escape_size: false,
+            escape_screen: false,
             escape_extra: false,
             sequence: Vec::new(),
+            origin: false,
+            autowrap: true,
             mouse_vt200: false,
             mouse_btn: false,
             mouse_sgr: false,
@@ -175,8 +179,12 @@ impl Console {
         let h = self.h;
 
         if self.x >= w {
-            self.x = 0;
-            self.y += 1;
+            if self.autowrap {
+                self.x = 0;
+                self.y += 1;
+            } else {
+                self.x = w.checked_sub(1).unwrap_or(0);
+            }
         }
 
         if self.y + 1 > h {
@@ -210,25 +218,25 @@ impl Console {
                     self.escape_sequence = false;
                 },
                 'E' => {
-                    self.x = 1;
-                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.x = 0;
+                    self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
                     self.escape_sequence = false;
                 },
                 'F' => {
-                    self.x = 1;
-                    self.y -= cmp::min(self.y, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1));
+                    self.x = 0;
+                    self.y -= cmp::min(self.y, cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1)));
                     self.escape_sequence = false;
                 },
                 'G' => {
-                    let col = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
+                    let col = cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
                     self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
                     self.escape_sequence = false;
                 },
                 'H' | 'f' => {
-                    let row = self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
+                    let row = cmp::max(1, self.sequence.get(0).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
                     self.y = cmp::max(0, cmp::min(self.h as isize - 1, row - 1)) as usize;
 
-                    let col = self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1);
+                    let col = cmp::max(1, self.sequence.get(1).map_or("", |p| &p).parse::<isize>().unwrap_or(1));
                     self.x = cmp::max(0, cmp::min(self.w as isize - 1, col - 1)) as usize;
 
                     self.escape_sequence = false;
@@ -237,25 +245,6 @@ impl Console {
                     self.fix_cursor(callback);
 
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        0 => {
-                            // Clear current row from cursor
-                            callback(Event::Rect {
-                                x: self.x,
-                                y: self.y,
-                                w: self.w - self.x,
-                                h: 1,
-                                color: self.background
-                            });
-
-                            // Clear following rows
-                            callback(Event::Rect {
-                                x: 0,
-                                y: self.y,
-                                w: self.w,
-                                h: self.h - self.y,
-                                color: self.background
-                            });
-                        },
                         1 => {
                             // Clear previous rows
                             callback(Event::Rect {
@@ -289,16 +278,21 @@ impl Console {
                                 color: self.background
                             });
                         },
-                        _ => {}
-                    }
+                        3 => {
+                            // Erase all
+                            self.x = 0;
+                            self.y = 0;
 
-                    self.escape_sequence = false;
-                },
-                'K' => {
-                    self.fix_cursor(callback);
-
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        0 => {
+                            // Clear all rows
+                            callback(Event::Rect {
+                                x: 0,
+                                y: 0,
+                                w: self.w,
+                                h: self.h,
+                                color: self.background
+                            });
+                        },
+                        _ => {
                             // Clear current row from cursor
                             callback(Event::Rect {
                                 x: self.x,
@@ -307,7 +301,24 @@ impl Console {
                                 h: 1,
                                 color: self.background
                             });
-                        },
+
+                            // Clear following rows
+                            callback(Event::Rect {
+                                x: 0,
+                                y: self.y,
+                                w: self.w,
+                                h: self.h - self.y,
+                                color: self.background
+                            });
+                        }
+                    }
+
+                    self.escape_sequence = false;
+                },
+                'K' => {
+                    self.fix_cursor(callback);
+
+                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
                         1 => {
                             // Clear current row to cursor
                             callback(Event::Rect {
@@ -328,7 +339,16 @@ impl Console {
                                 color: self.background
                             });
                         },
-                        _ => {}
+                        _ => {
+                            // Clear current row from cursor
+                            callback(Event::Rect {
+                                x: self.x,
+                                y: self.y,
+                                w: self.w - self.x,
+                                h: 1,
+                                color: self.background
+                            });
+                        },
                     }
 
                     self.escape_sequence = false;
@@ -361,6 +381,13 @@ impl Console {
                 'T' => {
                     let rows = self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(1);
                     self.reverse_scroll(rows, callback);
+                    self.escape_sequence = false;
+                },
+                'c' => {
+                    let report = format!("\x1B[?6c");
+                    callback(Event::Input {
+                        data: &report.into_bytes()
+                    });
                     self.escape_sequence = false;
                 },
                 'd' => {
@@ -437,7 +464,9 @@ impl Console {
                             49 => {
                                 self.background = Color::Ansi(0);
                             },
-                            _ => {},
+                            _ => {
+                                println!("Unknown mode {:?}", value);
+                            },
                         }
                     }
 
@@ -451,7 +480,9 @@ impl Console {
                                 data: &report.into_bytes()
                             });
                         },
-                        _ => ()
+                        unknown => {
+                            println!("Unknown status request {:?}", unknown);
+                        }
                     }
                     self.escape_sequence = false;
                 },
@@ -475,6 +506,21 @@ impl Console {
                 '?' => self.escape_extra = true,
                 'h' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
+                        3 => {
+                            self.top_margin = 0;
+                            self.bottom_margin = self.h;
+
+                            // Clear screen
+                            callback(Event::Rect {
+                                x: 0,
+                                y: 0,
+                                w: self.w,
+                                h: self.h,
+                                color: self.background
+                            });
+                        },
+                        6 => self.origin = true,
+                        7 => self.autowrap = true,
                         25 => self.cursor = true,
                         47 => callback(Event::ScreenBuffer {
                             alternate: true,
@@ -501,13 +547,30 @@ impl Console {
                                 clear: true,
                             });
                         },
-                        _ => ()
+                        unknown => {
+                            println!("Unknown parameter on {:?}", unknown);
+                        }
                     }
 
                     self.escape_sequence = false;
                 },
                 'l' if self.escape_extra => {
                     match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
+                        3 => {
+                            self.top_margin = 0;
+                            self.bottom_margin = self.h;
+
+                            // Clear screen
+                            callback(Event::Rect {
+                                x: 0,
+                                y: 0,
+                                w: self.w,
+                                h: self.h,
+                                color: self.background
+                            });
+                        },
+                        6 => self.origin = false,
+                        7 => self.autowrap = false,
                         25 => self.cursor = false,
                         47 => callback(Event::ScreenBuffer {
                             alternate: false,
@@ -534,7 +597,9 @@ impl Console {
                                 clear: false,
                             });
                         }
-                        _ => ()
+                        unknown => {
+                            println!("Unknown parameter off {:?}", unknown);
+                        }
                     }
 
                     self.escape_sequence = false;
@@ -621,14 +686,41 @@ impl Console {
             if !self.escape_g1 {
                 self.escape = false;
             }
-        } else if self.escape_size {
+        } else if self.escape_screen {
                 match c {
+                    '8' => {
+                        for x in 10..70 {
+                            self.x = x;
+
+                            self.y = 8;
+                            self.block('E', callback);
+
+                            self.y = 15;
+                            self.block('E', callback);
+                        }
+
+                        for y in 9..15 {
+                            self.y = y;
+
+                            self.x = 10;
+                            self.block('E', callback);
+
+                            self.x = 69;
+                            self.block('E', callback);
+                        }
+
+                        self.x = 0;
+                        self.y = 0;
+
+                        self.escape_screen = false;
+                    },
                     _ => {
-                        self.escape_size = false;
+                        println!("Unknown screen escape {:?}", c);
+                        self.escape_screen = false;
                     }
                 }
 
-                if !self.escape_size {
+                if !self.escape_screen {
                     self.escape = false;
                 }
         } else {
@@ -652,7 +744,7 @@ impl Console {
                     self.escape_g1 = true;
                 },
                 '#' => {
-                    self.escape_size = true;
+                    self.escape_screen = true;
                 },
                 'D' => {
                     self.x = 0;
