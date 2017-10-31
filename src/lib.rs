@@ -182,7 +182,7 @@ impl Console {
         if self.y + 1 > h {
             let rows = self.y + 1 - h;
             self.scroll(rows, callback);
-            self.y -= rows;
+            self.y = self.y.checked_sub(rows).unwrap_or(0);
         }
     }
 
