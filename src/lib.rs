@@ -40,6 +40,10 @@ pub enum Event<'a> {
         w: usize,
         h: usize,
     },
+    Resize {
+        w: usize,
+        h: usize,
+    },
     Title {
         title: String
     }
@@ -186,110 +190,6 @@ impl State {
                     self.sequence.push(String::new());
                 },
                 '?' => self.escape_extra = true,
-                'h' if self.escape_extra => {
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        3 => {
-                            self.x = 0;
-                            self.y = 0;
-                            self.top_margin = 0;
-                            self.bottom_margin = self.h;
-
-                            // Clear screen
-                            callback(Event::Rect {
-                                x: 0,
-                                y: 0,
-                                w: self.w,
-                                h: self.h,
-                                color: self.background
-                            });
-                        },
-                        6 => self.origin = true,
-                        7 => self.autowrap = true,
-                        25 => self.cursor = true,
-                        47 => callback(Event::ScreenBuffer {
-                            alternate: true,
-                            clear: false,
-                        }),
-                        1000 => self.mouse_vt200 = true,
-                        1002 => self.mouse_btn = true,
-                        1006 => self.mouse_sgr = true,
-                        1015 => self.mouse_rxvt = true,
-                        1047 => callback(Event::ScreenBuffer {
-                            alternate: true,
-                            clear: false,
-                        }),
-                        1048 => {
-                            self.save_x = self.x;
-                            self.save_y = self.y;
-                        },
-                        1049 => {
-                            self.save_x = self.x;
-                            self.save_y = self.y;
-
-                            callback(Event::ScreenBuffer {
-                                alternate: true,
-                                clear: true,
-                            });
-                        },
-                        unknown => {
-                            println!("Unknown parameter on {:?}", unknown);
-                        }
-                    }
-
-                    self.escape_sequence = false;
-                },
-                'l' if self.escape_extra => {
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        3 => {
-                            self.x = 0;
-                            self.y = 0;
-                            self.top_margin = 0;
-                            self.bottom_margin = self.h;
-
-                            // Clear screen
-                            callback(Event::Rect {
-                                x: 0,
-                                y: 0,
-                                w: self.w,
-                                h: self.h,
-                                color: self.background
-                            });
-                        },
-                        6 => self.origin = false,
-                        7 => self.autowrap = false,
-                        25 => self.cursor = false,
-                        47 => callback(Event::ScreenBuffer {
-                            alternate: false,
-                            clear: false,
-                        }),
-                        1000 => self.mouse_vt200 = false,
-                        1002 => self.mouse_btn = false,
-                        1006 => self.mouse_sgr = false,
-                        1015 => self.mouse_rxvt = false,
-                        1047 => callback(Event::ScreenBuffer {
-                            alternate: false,
-                            clear: true
-                        }),
-                        1048 => {
-                            self.x = self.save_x;
-                            self.y = self.save_y;
-                        },
-                        1049 => {
-                            self.x = self.save_x;
-                            self.y = self.save_y;
-
-                            callback(Event::ScreenBuffer {
-                                alternate: false,
-                                clear: false,
-                            });
-                        }
-                        unknown => {
-                            println!("Unknown parameter off {:?}", unknown);
-                        }
-                    }
-
-                    self.escape_sequence = false;
-                },
                 '@' ... '~' => {
                     println!("Unknown escape_sequence {:?} {:?}", self.sequence, c);
                     self.escape_sequence = false
@@ -350,67 +250,6 @@ impl State {
                 self.escape = false;
                 self.escape_extra = false;
             }
-        } else if self.escape_g0 {
-            match c {
-                _ => {
-                    self.g0 = c;
-                    self.escape_g0 = false;
-                }
-            }
-
-            if !self.escape_g0 {
-                self.escape = false;
-            }
-        } else if self.escape_g1 {
-            match c {
-                _ => {
-                    self.g1 = c;
-                    self.escape_g1 = false;
-                }
-            }
-
-            if !self.escape_g1 {
-                self.escape = false;
-            }
-        } else if self.escape_screen {
-                match c {
-                    '8' => {
-                        for x in 10..70 {
-                            self.x = x;
-
-                            self.y = 8;
-                            self.block('E', callback);
-
-                            self.y = 15;
-                            self.block('E', callback);
-                        }
-
-                        for y in 9..15 {
-                            self.y = y;
-
-                            self.x = 10;
-                            self.block('E', callback);
-
-                            self.x = 69;
-                            self.block('E', callback);
-                        }
-
-                        self.x = 0;
-                        self.y = 0;
-
-                        self.escape_screen = false;
-                    },
-                    _ => {
-                        println!("Unknown screen escape {:?}", c);
-                        self.escape_screen = false;
-                    }
-                }
-
-                if !self.escape_screen {
-                    self.escape = false;
-                }
-        } else {
-
         }
     }
     */
@@ -629,36 +468,126 @@ impl State {
                 });
             },
             'd' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);;
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
                 self.y = cmp::max(0, cmp::min(self.h as i64 - 1, param - 1)) as usize;
             },
-            'n' => {
+            'h' => {
+                //TODO: Check intermediate
                 let param = params.get(0).map(|v| *v).unwrap_or(0);
                 match param {
-                    6 => {
-                        let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
-                        callback(Event::Input {
-                            data: &report.into_bytes()
+                    3 => {
+                        self.x = 0;
+                        self.y = 0;
+                        self.top_margin = 0;
+                        self.bottom_margin = self.h;
+
+                        self.w = 132;
+                        //Resize screen
+                        callback(Event::Resize {
+                            w: self.w,
+                            h: self.h
+                        });
+
+                        // Clear screen
+                        callback(Event::Rect {
+                            x: 0,
+                            y: 0,
+                            w: self.w,
+                            h: self.h,
+                            color: self.background
                         });
                     },
-                    _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                    6 => self.origin = true,
+                    7 => self.autowrap = true,
+                    25 => self.cursor = true,
+                    47 => callback(Event::ScreenBuffer {
+                        alternate: true,
+                        clear: false,
+                    }),
+                    1000 => self.mouse_vt200 = true,
+                    1002 => self.mouse_btn = true,
+                    1006 => self.mouse_sgr = true,
+                    1015 => self.mouse_rxvt = true,
+                    1047 => callback(Event::ScreenBuffer {
+                        alternate: true,
+                        clear: false,
+                    }),
+                    1048 => {
+                        self.save_x = self.x;
+                        self.save_y = self.y;
+                    },
+                    1049 => {
+                        self.save_x = self.x;
+                        self.save_y = self.y;
+
+                        callback(Event::ScreenBuffer {
+                            alternate: true,
+                            clear: true,
+                        });
+                    },
+                    unknown => {
+                        println!("Unknown CSI {:?} param {:?}", c, unknown);
                     }
                 }
             },
-            'r' => {
-                let top = params.get(0).map(|v| *v).unwrap_or(1);
-                let bottom = params.get(1).map(|v| *v).unwrap_or(self.h as i64);
-                self.top_margin = cmp::max(0, top as isize - 1) as usize;
-                self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
-            },
-            's' => {
-                self.save_x = self.x;
-                self.save_y = self.y;
-            },
-            'u' => {
-                self.x = self.save_x;
-                self.y = self.save_y;
+            'l' => {
+                //TODO: Check intermediate
+                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                match param {
+                    3 => {
+                        self.x = 0;
+                        self.y = 0;
+                        self.top_margin = 0;
+                        self.bottom_margin = self.h;
+
+                        self.w = 80;
+                        //Resize screen
+                        callback(Event::Resize {
+                            w: self.w,
+                            h: self.h
+                        });
+
+                        // Clear screen
+                        callback(Event::Rect {
+                            x: 0,
+                            y: 0,
+                            w: self.w,
+                            h: self.h,
+                            color: self.background
+                        });
+                    },
+                    6 => self.origin = false,
+                    7 => self.autowrap = false,
+                    25 => self.cursor = false,
+                    47 => callback(Event::ScreenBuffer {
+                        alternate: false,
+                        clear: false,
+                    }),
+                    1000 => self.mouse_vt200 = false,
+                    1002 => self.mouse_btn = false,
+                    1006 => self.mouse_sgr = false,
+                    1015 => self.mouse_rxvt = false,
+                    1047 => callback(Event::ScreenBuffer {
+                        alternate: false,
+                        clear: true
+                    }),
+                    1048 => {
+                        self.x = self.save_x;
+                        self.y = self.save_y;
+                    },
+                    1049 => {
+                        self.x = self.save_x;
+                        self.y = self.save_y;
+
+                        callback(Event::ScreenBuffer {
+                            alternate: false,
+                            clear: false,
+                        });
+                    }
+                    unknown => {
+                        println!("Unknown CSI {:?} param {:?}", c, unknown);
+                    }
+                }
             },
             'm' => {
                 // Display attributes
@@ -734,6 +663,34 @@ impl State {
                     }
                 }
             },
+            'n' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                match param {
+                    6 => {
+                        let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
+                        callback(Event::Input {
+                            data: &report.into_bytes()
+                        });
+                    },
+                    _ => {
+                        println!("Unknown CSI {:?} param {:?}", c, param);
+                    }
+                }
+            },
+            'r' => {
+                let top = params.get(0).map(|v| *v).unwrap_or(1);
+                let bottom = params.get(1).map(|v| *v).unwrap_or(self.h as i64);
+                self.top_margin = cmp::max(0, top as isize - 1) as usize;
+                self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
+            },
+            's' => {
+                self.save_x = self.x;
+                self.save_y = self.y;
+            },
+            'u' => {
+                self.x = self.save_x;
+                self.y = self.save_y;
+            },
             _ => {
                 println!("Unknown CSI {:?}", c);
             }
@@ -766,7 +723,7 @@ impl State {
                 match intermediates.get(0).map(|v| *v as char) {
                     Some('#') => {
                         // Test pattern
-                        for x in 10..70 {
+                        for x in (self.w/2).checked_sub(30).unwrap_or(10)..(self.w/2).checked_add(30).unwrap_or(70) {
                             self.x = x;
 
                             self.y = 8;
@@ -779,10 +736,10 @@ impl State {
                         for y in 9..15 {
                             self.y = y;
 
-                            self.x = 10;
+                            self.x = (self.w/2).checked_sub(30).unwrap_or(10);
                             self.block('E', callback);
 
-                            self.x = 69;
+                            self.x = (self.w/2).checked_add(29).unwrap_or(69);
                             self.block('E', callback);
                         }
 
@@ -841,26 +798,26 @@ pub struct Performer<'a, F: FnMut(Event) + 'a> {
 
 impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     fn print(&mut self, c: char) {
-        println!("[print] {:?}", c);
+        //println!("[print] {:?}", c);
         self.state.print(c, self.callback);
     }
 
     fn execute(&mut self, byte: u8) {
-        println!("[execute] {:02x}", byte);
+        //println!("[execute] {:02x}", byte);
         self.state.execute(byte as char, self.callback);
     }
 
     fn hook(&mut self, params: &[i64], intermediates: &[u8], ignore: bool) {
-        println!("[hook] params={:?}, intermediates={:?}, ignore={:?}",
-                 params, intermediates, ignore);
+        //println!("[hook] params={:?}, intermediates={:?}, ignore={:?}",
+        //         params, intermediates, ignore);
     }
 
     fn put(&mut self, byte: u8) {
-        println!("[put] {:02x}", byte);
+        //println!("[put] {:02x}", byte);
     }
 
     fn unhook(&mut self) {
-        println!("[unhook]");
+        //println!("[unhook]");
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]]) {
@@ -868,14 +825,14 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     }
 
     fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
-        println!("[csi_dispatch] params={:?}, intermediates={:?}, ignore={:?}, char={:?}",
-                 params, intermediates, ignore, c);
+        //println!("[csi_dispatch] params={:?}, intermediates={:?}, ignore={:?}, char={:?}",
+        //         params, intermediates, ignore, c);
         self.state.csi(c, params, intermediates, self.callback);
     }
 
     fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, byte: u8) {
-        println!("[esc_dispatch] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x}",
-                 params, intermediates, ignore, byte);
+        //println!("[esc_dispatch] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x}",
+        //         params, intermediates, ignore, byte);
         self.state.esc(byte as char, params, intermediates, self.callback);
     }
 }
