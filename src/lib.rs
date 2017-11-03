@@ -162,11 +162,10 @@ impl State {
 
     fn fix_cursor<F: FnMut(Event)>(&mut self, callback: &mut F) {
         let w = self.w;
-        let h = self.h;
+        let h = cmp::min(self.h, self.bottom_margin + 1);
 
         if self.x >= w {
             if self.autowrap {
-                println!("Autowrap");
                 self.x = 0;
                 self.y += 1;
             } else {
@@ -255,27 +254,28 @@ impl State {
     */
 
     pub fn print<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
-        self.fix_cursor(callback);
         self.block(c, callback);
         self.x += 1;
+        self.fix_cursor(callback);
     }
 
     pub fn execute<F: FnMut(Event)>(&mut self, c: char, _callback: &mut F) {
+        // Fix for vt100 wrapping behavior: http://invisible-island.net/xterm/xterm.faq.html#vt100_wrapping
+        let xenl = self.x + 1 >= self.w;
+
         match c {
             //'\x07' => {}, // FIXME: Add bell
             '\x08' => { // Backspace
-                if self.x >= 1 {
-                    self.x -= 1;
-                }
+                self.x = cmp::max(0, self.x as i64 - 1) as usize;
             },
-            '\x09' => { // Tab
-                self.x = ((self.x / 8) + 1) * 8;
+            '\x09' => if ! xenl { // Tab
+                self.x = cmp::max(0, cmp::min(self.w as i64 - 1, ((self.x as i64 / 8) + 1) * 8)) as usize;
             },
-            '\x0A' => { // Newline
+            '\x0A' => if ! xenl { // Newline
                 self.x = 0;
                 self.y += 1;
             },
-            '\x0D' => { // Carriage Return
+            '\x0D' => if ! xenl { // Carriage Return
                 self.x = 0;
             },
             _ => {
@@ -288,19 +288,27 @@ impl State {
         match c {
             'A' => {
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
-                self.y -= cmp::min(self.y, cmp::max(1, param) as usize);
+                if self.y < self.top_margin {
+                    self.y = cmp::max(0, self.y as i64 - cmp::max(1, param)) as usize;
+                } else {
+                    self.y = cmp::max(self.top_margin as i64, self.y as i64 - cmp::max(1, param)) as usize;
+                }
             },
             'B' => {
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
-                self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, param) as usize);
+                if self.y > self.bottom_margin {
+                    self.y = cmp::max(0, cmp::min(self.h as i64 - 1, self.y as i64 + cmp::max(1, param))) as usize;
+                } else {
+                    self.y = cmp::max(0, cmp::min(self.bottom_margin as i64, self.y as i64 + cmp::max(1, param))) as usize;
+                }
             },
             'C' => {
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
-                self.x += cmp::min(self.w.checked_sub(self.x + 1).unwrap_or(0), cmp::max(1, param) as usize);
+                self.x = cmp::max(0, cmp::min(self.w as i64 - 1, self.x as i64 + cmp::max(1, param))) as usize;
             },
             'D' => {
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
-                self.x -= cmp::min(self.x, cmp::max(1, param) as usize);
+                self.x = cmp::max(0, self.x as i64 - cmp::max(1, param)) as usize;
             },
             'E' => {
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
@@ -321,7 +329,14 @@ impl State {
                 {
                     let param = params.get(0).map(|v| *v).unwrap_or(1);
                     let row = cmp::max(1, param);
-                    self.y = cmp::max(0, cmp::min(self.h as i64 - 1, row - 1)) as usize;
+
+                    let (top, bottom) = if self.origin {
+                        (self.top_margin, self.bottom_margin + 1)
+                    } else {
+                        (0, self.h)
+                    };
+
+                    self.y = cmp::max(0, cmp::min(bottom as i64 - 1, row + top as i64 - 1)) as usize;
                 }
 
                 {
@@ -479,7 +494,7 @@ impl State {
                         self.x = 0;
                         self.y = 0;
                         self.top_margin = 0;
-                        self.bottom_margin = self.h;
+                        self.bottom_margin = cmp::max(0, self.h as isize - 1) as usize;
 
                         self.w = 132;
                         //Resize screen
@@ -497,7 +512,11 @@ impl State {
                             color: self.background
                         });
                     },
-                    6 => self.origin = true,
+                    6 => {
+                        self.origin = true;
+                        self.x = 0;
+                        self.y = self.top_margin;
+                    },
                     7 => self.autowrap = true,
                     25 => self.cursor = true,
                     47 => callback(Event::ScreenBuffer {
@@ -538,7 +557,7 @@ impl State {
                         self.x = 0;
                         self.y = 0;
                         self.top_margin = 0;
-                        self.bottom_margin = self.h;
+                        self.bottom_margin = cmp::max(0, self.h as isize - 1) as usize;
 
                         self.w = 80;
                         //Resize screen
@@ -556,7 +575,11 @@ impl State {
                             color: self.background
                         });
                     },
-                    6 => self.origin = false,
+                    6 => {
+                        self.origin = false;
+                        self.x = 0;
+                        self. y = 0;
+                    },
                     7 => self.autowrap = false,
                     25 => self.cursor = false,
                     47 => callback(Event::ScreenBuffer {
@@ -799,18 +822,17 @@ pub struct Performer<'a, F: FnMut(Event) + 'a> {
 
 impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     fn print(&mut self, c: char) {
-        //println!("[print] {:?}", c);
+        //println!("[print] {:?} at {}, {}", c, self.state.x, self.state.y);
         self.state.print(c, self.callback);
     }
 
     fn execute(&mut self, byte: u8) {
-        //println!("[execute] {:02x}", byte);
+        //println!("[execute] {:02x} at {}, {}", byte, self.state.x, self.state.y);
         self.state.execute(byte as char, self.callback);
     }
 
     fn hook(&mut self, params: &[i64], intermediates: &[u8], ignore: bool) {
-        //println!("[hook] params={:?}, intermediates={:?}, ignore={:?}",
-        //         params, intermediates, ignore);
+        //println!("[hook] params={:?}, intermediates={:?}, ignore={:?}", params, intermediates, ignore);
     }
 
     fn put(&mut self, byte: u8) {
@@ -822,18 +844,16 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]]) {
-        println!("[osc_dispatch] params={:?}", params);
+        println!("[osc] params={:?}", params);
     }
 
     fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
-        //println!("[csi_dispatch] params={:?}, intermediates={:?}, ignore={:?}, char={:?}",
-        //         params, intermediates, ignore, c);
+        //println!("[csi] params={:?}, intermediates={:?}, ignore={:?}, char={:?} at {}, {}", params, intermediates, ignore, c, self.state.x, self.state.y);
         self.state.csi(c, params, intermediates, self.callback);
     }
 
     fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, byte: u8) {
-        //println!("[esc_dispatch] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x}",
-        //         params, intermediates, ignore, byte);
+        //println!("[esc] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", params, intermediates, ignore, byte, self.state.x, self.state.y);
         self.state.esc(byte as char, params, intermediates, self.callback);
     }
 }
@@ -857,56 +877,6 @@ impl Console {
                 state: &mut self.state,
                 callback: &mut callback,
             }, *byte);
-            /*
-            let c_opt = match *byte {
-                //ASCII
-                0b00000000 ... 0b01111111 => {
-                    Some(*byte as char)
-                },
-                //Continuation byte
-                0b10000000 ... 0b10111111 if self.utf_step > 0 => {
-                    self.utf_step -= 1;
-                    self.utf_data |= ((*byte as u32) & 0b111111) << (6 * self.utf_step);
-                    if self.utf_step == 0 {
-                        let data = self.utf_data;
-                        self.utf_data = 0;
-                        char::from_u32(data)
-                    } else {
-                        None
-                    }
-                },
-                //Two byte lead
-                0b11000000 ... 0b11011111 => {
-                    self.utf_step = 1;
-                    self.utf_data = ((*byte as u32) & 0b11111) << (6 * self.utf_step);
-                    None
-                },
-                //Three byte lead
-                0b11100000 ... 0b11101111 => {
-                    self.utf_step = 2;
-                    self.utf_data = ((*byte as u32) & 0b1111) << (6 * self.utf_step);
-                    None
-                },
-                //Four byte lead
-                0b11110000 ... 0b11110111 => {
-                    self.utf_step = 3;
-                    self.utf_data = ((*byte as u32) & 0b111) << (6 * self.utf_step);
-                    None
-                },
-                //Invalid, use replacement character
-                _ => {
-                    char::from_u32(0xFFFD)
-                }
-            };
-
-            if let Some(c) = c_opt {
-                if self.escape && (c < '\x08' || c > '\x0D') {
-                    self.code(c, &mut callback);
-                } else {
-                    self.character(c, &mut callback);
-                }
-            }
-            */
         };
     }
 }
