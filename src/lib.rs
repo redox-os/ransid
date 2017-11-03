@@ -3,7 +3,7 @@
 
 extern crate vte;
 
-use std::{char, cmp};
+use std::{char, cmp, str};
 
 pub use color::Color;
 
@@ -179,79 +179,6 @@ impl State {
             self.y = self.y.checked_sub(rows).unwrap_or(0);
         }
     }
-
-    /*
-    pub fn code<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
-        if self.escape_sequence {
-            match c {
-                ';' => {
-                    // Split sequence into list
-                    self.sequence.push(String::new());
-                },
-                '?' => self.escape_extra = true,
-                '@' ... '~' => {
-                    println!("Unknown escape_sequence {:?} {:?}", self.sequence, c);
-                    self.escape_sequence = false
-                },
-                _ => {
-                    // Add a number to the sequence list
-                    if let Some(value) = self.sequence.last_mut() {
-                        value.push(c);
-                    }
-                },
-            }
-
-            if !self.escape_sequence {
-                self.sequence.clear();
-                self.escape = false;
-                self.escape_extra = false;
-            }
-        } else if self.escape_os {
-            match c {
-                ';' => {
-                    // Split sequence into list
-                    self.sequence.push(String::new());
-                },
-                '\x07' => {
-                    // Break on BEL
-                    match self.sequence.get(0).map_or("", |p| &p).parse::<usize>().unwrap_or(0) {
-                        0 | 1 | 2 => {
-                            // Set window title
-                            let mut title = String::new();
-                            for (i, seq) in self.sequence.iter().skip(1).enumerate() {
-                                if i > 0 {
-                                    title.push(';');
-                                }
-                                title.push_str(seq);
-                            }
-
-                            callback(Event::Title {
-                                title: title
-                            });
-                        },
-                        _ => {
-                            println!("Unknown OS command {:?}", self.sequence);
-                        }
-                    }
-
-                    self.escape_os = false;
-                },
-                _ => {
-                    // Add a character to the sequence list
-                    if let Some(value) = self.sequence.last_mut() {
-                        value.push(c);
-                    }
-                },
-            }
-
-            if !self.escape_os {
-                self.sequence.clear();
-                self.escape = false;
-                self.escape_extra = false;
-            }
-        }
-    }
-    */
 
     pub fn print<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
         self.block(c, callback);
@@ -726,8 +653,6 @@ impl State {
 
     pub fn esc<F: FnMut(Event)>(&mut self, c: char, _params: &[i64], intermediates: &[u8], callback: &mut F) {
         match c {
-            //'(' => {},
-            //')' => {},
             'D' => {
                 self.y += 1;
             },
@@ -817,6 +742,25 @@ impl State {
             }
         }
     }
+
+    pub fn osc<F: FnMut(Event)>(&mut self, params: &[&[u8]], callback: &mut F) {
+        match params.get(0).map(|s| s.get(0).map(|b| *b).unwrap_or(0)).unwrap_or(0) as char {
+            '0' | '1' | '2' => if let Some(bytes) = params.get(1) {
+                if let Ok(string) = str::from_utf8(bytes) {
+                    callback(Event::Title {
+                        title: string.to_string()
+                    });
+                } else {
+                    println!("Invalid UTF-8 {:?}", bytes);
+                }
+            } else {
+                println!("Unknown OSC {:?}", params);
+            },
+            _ => {
+                println!("Unknown OSC {:?}", params);
+            }
+        }
+    }
 }
 
 pub struct Performer<'a, F: FnMut(Event) + 'a> {
@@ -848,7 +792,8 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]]) {
-        println!("[osc] params={:?}", params);
+        //println!("[osc] params={:?}", params);
+        self.state.osc(params, self.callback);
     }
 
     fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
