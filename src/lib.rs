@@ -614,7 +614,11 @@ impl State {
             },
             'm' => {
                 // Display attributes
-                let mut value_iter = params.iter();
+                let mut value_iter = if params.len() == 0 {
+                    [0].iter()
+                } else {
+                    params.iter()
+                };
                 while let Some(value) = value_iter.next() {
                     match *value {
                         0 => {
