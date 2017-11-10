@@ -188,7 +188,8 @@ impl State {
 
     pub fn execute<F: FnMut(Event)>(&mut self, c: char, _callback: &mut F) {
         // Fix for vt100 wrapping behavior: http://invisible-island.net/xterm/xterm.faq.html#vt100_wrapping
-        let xenl = self.x + 1 >= self.w;
+        //let xenl = self.x + 1 >= self.w;
+        let xenl = false;
 
         match c {
             //'\x07' => {}, // FIXME: Add bell
