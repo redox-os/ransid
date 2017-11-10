@@ -181,6 +181,7 @@ impl State {
     }
 
     pub fn print<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
+        self.fix_cursor(callback);
         self.block(c, callback);
         self.x += 1;
         self.fix_cursor(callback);
