@@ -634,7 +634,7 @@ impl State {
             'r' => {
                 let top = params.get(0).map(|v| *v).unwrap_or(1);
                 let bottom = params.get(1).map(|v| *v).unwrap_or(self.h as i64);
-                self.top_margin = cmp::max(0, top as isize - 1) as usize;
+                self.top_margin = cmp::max(0, cmp::min(self.h as isize - 1, top as isize - 1)) as usize;
                 self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
             },
             's' => {
@@ -838,6 +838,16 @@ impl Console {
             parser: vte::Parser::new(),
             state: State::new(w, h),
         }
+    }
+
+    pub fn resize(&mut self, w: usize, h: usize) {
+        let state = &mut self.state;
+
+        state.top_margin = cmp::max(0, cmp::min(h as isize - 1, state.top_margin as isize)) as usize;
+        state.bottom_margin = cmp::max(state.top_margin as isize, cmp::min(h as isize - 1, state.bottom_margin as isize + h as isize - state.h as isize)) as usize;
+
+        state.w = w;
+        state.h = h;
     }
 
     pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
