@@ -376,16 +376,15 @@ impl State {
                 }
             },
             'P' => {
-                //TODO: Fix
                 let param = params.get(0).map(|v| *v).unwrap_or(1);
-                let cols = cmp::max(0, cmp::min(self.w as i64 - 1, param)) as usize;
+                let cols = cmp::max(0, cmp::min(self.w as i64 - self.x as i64 - 1, param)) as usize;
                 //TODO: Use min and max to ensure correct behavior
                 callback(Event::Move {
                     from_x: self.x + cols,
                     from_y: self.y,
                     to_x: self.x,
                     to_y: self.y,
-                    w: self.w - cols,
+                    w: self.w - (self.x + cols),
                     h: 1,
                 });
                 callback(Event::Rect {
@@ -645,6 +644,26 @@ impl State {
             'u' => {
                 self.x = self.save_x;
                 self.y = self.save_y;
+            },
+            '@' => {
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let cols = cmp::max(0, cmp::min(self.w as i64 - self.x as i64 - 1, param)) as usize;
+                //TODO: Use min and max to ensure correct behavior
+                callback(Event::Move {
+                    from_x: self.x,
+                    from_y: self.y,
+                    to_x: self.x + cols,
+                    to_y: self.y,
+                    w: self.w - (self.x + cols),
+                    h: 1,
+                });
+                callback(Event::Rect {
+                    x: self.x,
+                    y: self.y,
+                    w: cols,
+                    h: 1,
+                    color: self.background,
+                });
             },
             _ => {
                 println!("Unknown CSI {:?}", c);
