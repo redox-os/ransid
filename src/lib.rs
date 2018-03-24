@@ -1,6 +1,3 @@
-#![crate_name="ransid"]
-#![crate_type="lib"]
-
 extern crate vte;
 
 use std::{char, cmp, str};
@@ -62,6 +59,8 @@ pub struct State {
     pub g1: char,
     pub foreground: Color,
     pub background: Color,
+    pub foreground_default: Color,
+    pub background_default: Color,
     pub bold: bool,
     pub inverted: bool,
     pub underlined: bool,
@@ -90,6 +89,8 @@ impl State {
             g1: '0',
             foreground: Color::Ansi(7),
             background: Color::Ansi(0),
+            foreground_default: Color::Ansi(7),
+            background_default: Color::Ansi(0),
             bold: false,
             inverted: false,
             underlined: false,
@@ -549,8 +550,8 @@ impl State {
                 while let Some(value) = value_iter.next() {
                     match *value {
                         0 => {
-                            self.foreground = Color::Ansi(7);
-                            self.background = Color::Ansi(0);
+                            self.foreground = self.foreground_default;
+                            self.background = self.background_default;
                             self.bold = false;
                             self.underlined = false;
                             self.inverted = false;
@@ -590,7 +591,7 @@ impl State {
                             _ => {}
                         },
                         39 => {
-                            self.foreground = Color::Ansi(7);
+                            self.foreground = self.foreground_default;
                         },
                         40 ... 47 => self.background = Color::Ansi(*value as u8 - 40),
                         48 => match value_iter.next().map(|v| *v).unwrap_or(0) {
@@ -609,7 +610,7 @@ impl State {
                             _ => {}
                         },
                         49 => {
-                            self.background = Color::Ansi(0);
+                            self.background = self.background_default;
                         },
                         _ => {
                             println!("Unknown CSI {:?} param {:?}", c, value);
@@ -740,8 +741,8 @@ impl State {
                 self.cursor = true;
                 self.g0 = 'B';
                 self.g1 = '0';
-                self.foreground = Color::Ansi(7);
-                self.background = Color::Ansi(0);
+                self.foreground = self.foreground_default;
+                self.background = self.background_default;
                 self.bold = false;
                 self.inverted = false;
                 self.underlined = false;
@@ -799,11 +800,11 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
         self.state.execute(byte as char, self.callback);
     }
 
-    fn hook(&mut self, params: &[i64], intermediates: &[u8], ignore: bool) {
+    fn hook(&mut self, _params: &[i64], _intermediates: &[u8], _ignore: bool) {
         //println!("[hook] params={:?}, intermediates={:?}, ignore={:?}", params, intermediates, ignore);
     }
 
-    fn put(&mut self, byte: u8) {
+    fn put(&mut self, _byte: u8) {
         //println!("[put] {:02x}", byte);
     }
 
@@ -816,12 +817,12 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
         self.state.osc(params, self.callback);
     }
 
-    fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, c: char) {
+    fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], _ignore: bool, c: char) {
         //println!("[csi] params={:?}, intermediates={:?}, ignore={:?}, char={:?} at {}, {}", params, intermediates, ignore, c, self.state.x, self.state.y);
         self.state.csi(c, params, intermediates, self.callback);
     }
 
-    fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], ignore: bool, byte: u8) {
+    fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], _ignore: bool, byte: u8) {
         //println!("[esc] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", params, intermediates, ignore, byte, self.state.x, self.state.y);
         self.state.esc(byte as char, params, intermediates, self.callback);
     }
