@@ -12,8 +12,8 @@ pub enum Event<'a> {
         y: usize,
         c: char,
         bold: bool,
-        underlined: bool,
         italic: bool,
+        underlined: bool,
         color: Color
     },
     Input {
@@ -64,8 +64,8 @@ pub struct State {
     pub background_default: Color,
     pub bold: bool,
     pub inverted: bool,
-    pub underlined: bool,
     pub italic: bool,
+    pub underlined: bool,
     pub cursor: bool,
     pub redraw: bool,
     pub origin: bool,
@@ -95,8 +95,8 @@ impl State {
             background_default: Color::Ansi(0),
             bold: false,
             inverted: false,
-            underlined: false,
             italic: false,
+            underlined: false,
             cursor: true,
             redraw: true,
             origin: false,
@@ -121,8 +121,8 @@ impl State {
             y: self.y,
             c: c,
             bold: self.bold,
-            underlined: self.underlined,
             italic: self.italic,
+            underlined: self.underlined,
             color: if self.inverted { self.background } else { self.foreground }
         });
     }
@@ -557,8 +557,8 @@ impl State {
                             self.foreground = self.foreground_default;
                             self.background = self.background_default;
                             self.bold = false;
-                            self.underlined = false;
                             self.italic = false;
+                            self.underlined = false;
                             self.inverted = false;
                         },
                         1 => {
@@ -756,8 +756,8 @@ impl State {
                 self.background = self.background_default;
                 self.bold = false;
                 self.inverted = false;
-                self.underlined = false;
                 self.italic = false;
+                self.underlined = false;
 
                 // Clear screen
                 callback(Event::Rect {
