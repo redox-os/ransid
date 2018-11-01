@@ -576,6 +576,9 @@ impl State {
                         21 => {
                             self.bold = false;
                         },
+                        23 => {
+                            self.italic = false;
+                        },
                         24 => {
                             self.underlined = false;
                         },
