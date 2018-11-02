@@ -1,4 +1,6 @@
 extern crate vte;
+#[macro_use]
+extern crate log;
 
 use std::{char, cmp, str};
 
@@ -212,7 +214,7 @@ impl State {
                 self.x = 0;
             },
             _ => {
-                println!("Unknown execute {:?}", c);
+                warn!("Unknown execute {:?}", c);
             }
         }
     }
@@ -336,7 +338,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        warn!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -376,7 +378,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        warn!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -477,7 +479,7 @@ impl State {
                         });
                     },
                     unknown => {
-                        println!("Unknown CSI {:?} param {:?}", c, unknown);
+                        warn!("Unknown CSI {:?} param {:?}", c, unknown);
                     }
                 }
             },
@@ -540,7 +542,7 @@ impl State {
                         });
                     }
                     unknown => {
-                        println!("Unknown CSI {:?} param {:?}", c, unknown);
+                        warn!("Unknown CSI {:?} param {:?}", c, unknown);
                     }
                 }
             },
@@ -624,7 +626,7 @@ impl State {
                             self.background = self.background_default;
                         },
                         _ => {
-                            println!("Unknown CSI {:?} param {:?}", c, value);
+                            warn!("Unknown CSI {:?} param {:?}", c, value);
                         },
                     }
                 }
@@ -639,7 +641,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        warn!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -678,7 +680,7 @@ impl State {
                 });
             },
             _ => {
-                println!("Unknown CSI {:?}", c);
+                warn!("Unknown CSI {:?}", c);
             }
         }
     }
@@ -732,7 +734,7 @@ impl State {
                         self.y = 0;
                     },
                     Some(inter) => {
-                        println!("Unknown ESC {:?} intermediate {:?}", c, inter);
+                        warn!("Unknown ESC {:?} intermediate {:?}", c, inter);
                     },
                     None => {
                         // Restore
@@ -771,7 +773,7 @@ impl State {
                 self.redraw = true;
             },
             _ => {
-                println!("Unknown ESC {:?}", c);
+                warn!("Unknown ESC {:?}", c);
             }
         }
     }
@@ -784,13 +786,13 @@ impl State {
                         title: string.to_string()
                     });
                 } else {
-                    println!("Invalid UTF-8 {:?}", bytes);
+                    warn!("Invalid UTF-8 {:?}", bytes);
                 }
             } else {
-                println!("Unknown OSC {:?}", params);
+                warn!("Unknown OSC {:?}", params);
             },
             _ => {
-                println!("Unknown OSC {:?}", params);
+                warn!("Unknown OSC {:?}", params);
             }
         }
     }

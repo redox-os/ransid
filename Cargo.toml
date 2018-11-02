@@ -14,3 +14,5 @@ path = "src/lib.rs"
 
 [dependencies]
 vte = "0.3"
+log = "0.4"
+
