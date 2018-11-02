@@ -14,6 +14,7 @@ pub enum Event<'a> {
         bold: bool,
         italic: bool,
         underlined: bool,
+        strikethrough: bool,
         color: Color
     },
     Input {
@@ -66,6 +67,7 @@ pub struct State {
     pub inverted: bool,
     pub italic: bool,
     pub underlined: bool,
+    pub strikethrough: bool,
     pub cursor: bool,
     pub redraw: bool,
     pub origin: bool,
@@ -97,6 +99,7 @@ impl State {
             inverted: false,
             italic: false,
             underlined: false,
+            strikethrough: false,
             cursor: true,
             redraw: true,
             origin: false,
@@ -123,6 +126,7 @@ impl State {
             bold: self.bold,
             italic: self.italic,
             underlined: self.underlined,
+            strikethrough: self.strikethrough,
             color: if self.inverted { self.background } else { self.foreground }
         });
     }
@@ -559,6 +563,7 @@ impl State {
                             self.bold = false;
                             self.italic = false;
                             self.underlined = false;
+                            self.strikethrough = false;
                             self.inverted = false;
                         },
                         1 => {
@@ -573,6 +578,9 @@ impl State {
                         7 => {
                             self.inverted = true;
                         },
+                        9 => {
+                            self.strikethrough = true;
+                        }
                         21 => {
                             self.bold = false;
                         },
@@ -758,6 +766,7 @@ impl State {
                 self.inverted = false;
                 self.italic = false;
                 self.underlined = false;
+                self.strikethrough = false;
 
                 // Clear screen
                 callback(Event::Rect {
