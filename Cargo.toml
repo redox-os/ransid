@@ -1,12 +1,12 @@
 [package]
-name = "ransid"
-description = "Rust ANSI Driver"
-repository = "https://github.com/jackpot51/ransid"
-version = "0.4.6"
+name = "ransid-log"
+description = "Fork of redox's ransid lib with italics and strikethrough and the log crate used for errors"
+repository = "https://github.com/E5ten/ransid"
+version = "0.4.7"
 license-file = "LICENSE"
 readme = "README.md"
 keywords = ["redox", "ansi"]
-authors = ["Jeremy Soller <jackpot51@gmail.com>"]
+authors = ["Jeremy Soller <jackpot51@gmail.com>, E5ten <e5ten.arch@gmail.com>"]
 
 [lib]
 name = "ransid"
