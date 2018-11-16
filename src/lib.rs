@@ -12,7 +12,9 @@ pub enum Event<'a> {
         y: usize,
         c: char,
         bold: bool,
+        italic: bool,
         underlined: bool,
+        strikethrough: bool,
         color: Color
     },
     Input {
@@ -63,7 +65,9 @@ pub struct State {
     pub background_default: Color,
     pub bold: bool,
     pub inverted: bool,
+    pub italic: bool,
     pub underlined: bool,
+    pub strikethrough: bool,
     pub cursor: bool,
     pub redraw: bool,
     pub origin: bool,
@@ -93,7 +97,9 @@ impl State {
             background_default: Color::Ansi(0),
             bold: false,
             inverted: false,
+            italic: false,
             underlined: false,
+            strikethrough: false,
             cursor: true,
             redraw: true,
             origin: false,
@@ -118,7 +124,9 @@ impl State {
             y: self.y,
             c: c,
             bold: self.bold,
+            italic: self.italic,
             underlined: self.underlined,
+            strikethrough: self.strikethrough,
             color: if self.inverted { self.background } else { self.foreground }
         });
     }
@@ -559,21 +567,36 @@ impl State {
                         1 => {
                             self.bold = true;
                         },
+                        3 => {
+                            self.italic = true;
+                        },
                         4 => {
                             self.underlined = true;
                         },
                         7 => {
                             self.inverted = true;
                         },
+                        9 => {
+                            self.strikethrough = true;
+                        },
+                        }
                         21 => {
                             self.bold = false;
                         },
+                        23 => {
+                            self.italic = false;
+                        },
+                        }
                         24 => {
                             self.underlined = false;
                         },
                         27 => {
                             self.inverted = false;
                         },
+                        29 => {
+                            self.strikethrough = false;
+                        },
+                        }
                         30 ... 37 => self.foreground = Color::Ansi(*value as u8 - 30),
                         38 => match value_iter.next().map(|v| *v).unwrap_or(0) {
                             2 => {
