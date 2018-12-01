@@ -13,4 +13,5 @@ name = "ransid"
 path = "src/lib.rs"
 
 [dependencies]
+log = "0.4"
 vte = "0.3"

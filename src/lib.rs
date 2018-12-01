@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate log;
 extern crate vte;
 
 use std::{char, cmp, str};
@@ -216,7 +218,7 @@ impl State {
                 self.x = 0;
             },
             _ => {
-                println!("Unknown execute {:?}", c);
+                debug!("Unknown execute {:?}", c);
             }
         }
     }
@@ -340,7 +342,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        debug!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -380,7 +382,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        debug!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -481,7 +483,7 @@ impl State {
                         });
                     },
                     unknown => {
-                        println!("Unknown CSI {:?} param {:?}", c, unknown);
+                        debug!("Unknown CSI {:?} param {:?}", c, unknown);
                     }
                 }
             },
@@ -544,7 +546,7 @@ impl State {
                         });
                     }
                     unknown => {
-                        println!("Unknown CSI {:?} param {:?}", c, unknown);
+                        debug!("Unknown CSI {:?} param {:?}", c, unknown);
                     }
                 }
             },
@@ -579,14 +581,12 @@ impl State {
                         9 => {
                             self.strikethrough = true;
                         },
-                        }
                         21 => {
                             self.bold = false;
                         },
                         23 => {
                             self.italic = false;
                         },
-                        }
                         24 => {
                             self.underlined = false;
                         },
@@ -596,7 +596,6 @@ impl State {
                         29 => {
                             self.strikethrough = false;
                         },
-                        }
                         30 ... 37 => self.foreground = Color::Ansi(*value as u8 - 30),
                         38 => match value_iter.next().map(|v| *v).unwrap_or(0) {
                             2 => {
@@ -636,7 +635,7 @@ impl State {
                             self.background = self.background_default;
                         },
                         _ => {
-                            println!("Unknown CSI {:?} param {:?}", c, value);
+                            debug!("Unknown CSI {:?} param {:?}", c, value);
                         },
                     }
                 }
@@ -651,7 +650,7 @@ impl State {
                         });
                     },
                     _ => {
-                        println!("Unknown CSI {:?} param {:?}", c, param);
+                        debug!("Unknown CSI {:?} param {:?}", c, param);
                     }
                 }
             },
@@ -690,7 +689,7 @@ impl State {
                 });
             },
             _ => {
-                println!("Unknown CSI {:?}", c);
+                debug!("Unknown CSI {:?}", c);
             }
         }
     }
@@ -744,7 +743,7 @@ impl State {
                         self.y = 0;
                     },
                     Some(inter) => {
-                        println!("Unknown ESC {:?} intermediate {:?}", c, inter);
+                        debug!("Unknown ESC {:?} intermediate {:?}", c, inter);
                     },
                     None => {
                         // Restore
@@ -782,7 +781,7 @@ impl State {
                 self.redraw = true;
             },
             _ => {
-                println!("Unknown ESC {:?}", c);
+                debug!("Unknown ESC {:?}", c);
             }
         }
     }
@@ -795,13 +794,13 @@ impl State {
                         title: string.to_string()
                     });
                 } else {
-                    println!("Invalid UTF-8 {:?}", bytes);
+                    debug!("Invalid UTF-8 {:?}", bytes);
                 }
             } else {
-                println!("Unknown OSC {:?}", params);
+                debug!("Unknown OSC {:?}", params);
             },
             _ => {
-                println!("Unknown OSC {:?}", params);
+                debug!("Unknown OSC {:?}", params);
             }
         }
     }
@@ -814,39 +813,39 @@ pub struct Performer<'a, F: FnMut(Event) + 'a> {
 
 impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
     fn print(&mut self, c: char) {
-        //println!("[print] {:?} at {}, {}", c, self.state.x, self.state.y);
+        trace!("[print] {:?} at {}, {}", c, self.state.x, self.state.y);
         self.state.print(c, self.callback);
     }
 
     fn execute(&mut self, byte: u8) {
-        //println!("[execute] {:02x} at {}, {}", byte, self.state.x, self.state.y);
+        trace!("[execute] {:02x} at {}, {}", byte, self.state.x, self.state.y);
         self.state.execute(byte as char, self.callback);
     }
 
     fn hook(&mut self, _params: &[i64], _intermediates: &[u8], _ignore: bool) {
-        //println!("[hook] params={:?}, intermediates={:?}, ignore={:?}", params, intermediates, ignore);
+        trace!("[hook] params={:?}, intermediates={:?}, ignore={:?}", _params, _intermediates, _ignore);
     }
 
     fn put(&mut self, _byte: u8) {
-        //println!("[put] {:02x}", byte);
+        trace!("[put] {:02x}", _byte);
     }
 
     fn unhook(&mut self) {
-        //println!("[unhook]");
+        trace!("[unhook]");
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]]) {
-        //println!("[osc] params={:?}", params);
+        trace!("[osc] params={:?}", params);
         self.state.osc(params, self.callback);
     }
 
     fn csi_dispatch(&mut self, params: &[i64], intermediates: &[u8], _ignore: bool, c: char) {
-        //println!("[csi] params={:?}, intermediates={:?}, ignore={:?}, char={:?} at {}, {}", params, intermediates, ignore, c, self.state.x, self.state.y);
+        trace!("[csi] params={:?}, intermediates={:?}, ignore={:?}, char={:?} at {}, {}", params, intermediates, _ignore, c, self.state.x, self.state.y);
         self.state.csi(c, params, intermediates, self.callback);
     }
 
     fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], _ignore: bool, byte: u8) {
-        //println!("[esc] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", params, intermediates, ignore, byte, self.state.x, self.state.y);
+        trace!("[esc] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", params, intermediates, _ignore, byte, self.state.x, self.state.y);
         self.state.esc(byte as char, params, intermediates, self.callback);
     }
 }
