@@ -197,13 +197,15 @@ impl State {
         self.x += 1;
     }
 
-    pub fn execute<F: FnMut(Event)>(&mut self, c: char, _callback: &mut F) {
+    pub fn execute<F: FnMut(Event)>(&mut self, c: char, callback: &mut F) {
         // Fix for vt100 wrapping behavior: http://invisible-island.net/xterm/xterm.faq.html#vt100_wrapping
         //let xenl = self.x + 1 >= self.w;
         let xenl = false;
 
         match c {
-            //'\x07' => {}, // FIXME: Add bell
+            '\x07' => {
+                debug!("BELL not implemented");
+            },
             '\x08' => { // Backspace
                 self.x = cmp::max(0, self.x as i64 - 1) as usize;
             },
@@ -213,6 +215,7 @@ impl State {
             '\x0A' => if ! xenl { // Newline
                 self.x = 0;
                 self.y += 1;
+                self.fix_cursor(callback);
             },
             '\x0D' => if ! xenl { // Carriage Return
                 self.x = 0;
@@ -516,7 +519,7 @@ impl State {
                     6 => {
                         self.origin = false;
                         self.x = 0;
-                        self. y = 0;
+                        self.y = 0;
                     },
                     7 => self.autowrap = false,
                     25 => self.cursor = false,
@@ -704,7 +707,7 @@ impl State {
                 self.y += 1;
             },
             'M' => {
-                while self.y <= 0 {
+                while self.y <= self.top_margin {
                     self.reverse_scroll(1, callback);
                     self.y += 1;
                 }
