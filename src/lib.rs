@@ -8,6 +8,7 @@ pub use color::Color;
 
 pub mod color;
 
+#[derive(Debug)]
 pub enum Event<'a> {
     Char {
         x: usize,
@@ -692,7 +693,7 @@ impl State {
                 });
             },
             _ => {
-                debug!("Unknown CSI {:?}", c);
+                debug!("Unknown CSI {:?} params {:?}", c, params);
             }
         }
     }

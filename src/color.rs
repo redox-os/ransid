@@ -1,5 +1,5 @@
 /// A color
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Color {
     Ansi(u8),
     TrueColor(u8, u8, u8),
