@@ -1,9 +1,9 @@
 [package]
 name = "ransid"
 description = "Rust ANSI Driver"
-repository = "https://github.com/jackpot51/ransid"
-version = "0.4.8"
-license-file = "LICENSE"
+repository = "https://gitlab.redox-os.org/redox-os/ransid"
+version = "0.4.9"
+license = "MIT"
 readme = "README.md"
 keywords = ["redox", "ansi"]
 authors = ["Jeremy Soller <jackpot51@gmail.com>"]
