@@ -411,7 +411,7 @@ impl State {
                 });
             },
             'S' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);;
+                let param = params.get(0).map(|v| *v).unwrap_or(1);
                 self.scroll(cmp::max(0, param) as usize, callback);
             },
             'T' => {
@@ -600,7 +600,7 @@ impl State {
                         29 => {
                             self.strikethrough = false;
                         },
-                        30 ... 37 => self.foreground = Color::Ansi(*value as u8 - 30),
+                        30 ..= 37 => self.foreground = Color::Ansi(*value as u8 - 30),
                         38 => match value_iter.next().map(|v| *v).unwrap_or(0) {
                             2 => {
                                 //True color
@@ -619,7 +619,7 @@ impl State {
                         39 => {
                             self.foreground = self.foreground_default;
                         },
-                        40 ... 47 => self.background = Color::Ansi(*value as u8 - 40),
+                        40 ..= 47 => self.background = Color::Ansi(*value as u8 - 40),
                         48 => match value_iter.next().map(|v| *v).unwrap_or(0) {
                             2 => {
                                 //True color
@@ -698,7 +698,7 @@ impl State {
         }
     }
 
-    pub fn esc<F: FnMut(Event)>(&mut self, c: char, _params: &[i64], intermediates: &[u8], callback: &mut F) {
+    pub fn esc<F: FnMut(Event)>(&mut self, c: char, intermediates: &[u8], callback: &mut F) {
         match c {
             'D' => {
                 self.y += 1;
@@ -826,8 +826,8 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
         self.state.execute(byte as char, self.callback);
     }
 
-    fn hook(&mut self, _params: &[i64], _intermediates: &[u8], _ignore: bool) {
-        trace!("[hook] params={:?}, intermediates={:?}, ignore={:?}", _params, _intermediates, _ignore);
+    fn hook(&mut self, _params: &[i64], _intermediates: &[u8], _ignore: bool, _action: char) {
+        trace!("[hook] params={:?}, intermediates={:?}, ignore={:?}, action={:?}", _params, _intermediates, _ignore, _action);
     }
 
     fn put(&mut self, _byte: u8) {
@@ -838,8 +838,8 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
         trace!("[unhook]");
     }
 
-    fn osc_dispatch(&mut self, params: &[&[u8]]) {
-        trace!("[osc] params={:?}", params);
+    fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
+        trace!("[osc] params={:?}, bell_terminated={:?}", params, _bell_terminated);
         self.state.osc(params, self.callback);
     }
 
@@ -848,9 +848,9 @@ impl<'a, F: FnMut(Event)> vte::Perform for Performer<'a, F> {
         self.state.csi(c, params, intermediates, self.callback);
     }
 
-    fn esc_dispatch(&mut self, params: &[i64], intermediates: &[u8], _ignore: bool, byte: u8) {
-        trace!("[esc] params={:?}, intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", params, intermediates, _ignore, byte, self.state.x, self.state.y);
-        self.state.esc(byte as char, params, intermediates, self.callback);
+    fn esc_dispatch(&mut self, intermediates: &[u8], _ignore: bool, byte: u8) {
+        trace!("[esc] intermediates={:?}, ignore={:?}, byte={:02x} at {}, {}", intermediates, _ignore, byte, self.state.x, self.state.y);
+        self.state.esc(byte as char, intermediates, self.callback);
     }
 }
 

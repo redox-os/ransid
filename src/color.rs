@@ -30,7 +30,7 @@ impl Color {
                 13 => encode_rgb(0xff, 0x00, 0xff),
                 14 => encode_rgb(0x00, 0xff, 0xff),
                 15 => encode_rgb(0xff, 0xff, 0xff),
-                16 ... 231 => {
+                16 ..= 231 => {
                     let convert = |value: u8| -> u8 {
                         match value {
                             0 => 0,
@@ -43,11 +43,10 @@ impl Color {
                     let b = convert((value - 16) % 6);
                     encode_rgb(r, g, b)
                 },
-                232 ... 255 => {
+                232 ..= 255 => {
                     let gray = (value - 232) * 10 + 8;
                     encode_rgb(gray, gray, gray)
                 },
-                _ => encode_rgb(0, 0, 0)
             }
         }
     }

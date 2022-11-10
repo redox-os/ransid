@@ -2,7 +2,7 @@
 name = "ransid"
 description = "Rust ANSI Driver"
 repository = "https://gitlab.redox-os.org/redox-os/ransid"
-version = "0.4.9"
+version = "0.5.0"
 license = "MIT"
 readme = "README.md"
 keywords = ["redox", "ansi"]
@@ -14,4 +14,4 @@ path = "src/lib.rs"
 
 [dependencies]
 log = "0.4"
-vte = "0.3"
+vte = "0.8"
