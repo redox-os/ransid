@@ -8,7 +8,7 @@ pub enum Color {
 impl Color {
     pub fn as_rgb(&self) -> u32 {
         let encode_rgb = |r: u8, g: u8, b: u8| -> u32 {
-            0xFF000000 | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
+            0xFF00_0000 | (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
         };
 
         match *self {

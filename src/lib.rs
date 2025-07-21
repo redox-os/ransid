@@ -88,8 +88,8 @@ impl State {
             y: 0,
             save_x: 0,
             save_y: 0,
-            w: w,
-            h: h,
+            w,
+            h,
             top_margin: 0,
             bottom_margin: cmp::max(0, h as isize - 1) as usize,
             g0: 'B',
@@ -125,7 +125,7 @@ impl State {
         callback(Event::Char {
             x: self.x,
             y: self.y,
-            c: c,
+            c,
             bold: self.bold,
             italic: self.italic,
             underlined: self.underlined,
@@ -181,14 +181,14 @@ impl State {
                 self.x = 0;
                 self.y += 1;
             } else {
-                self.x = w.checked_sub(1).unwrap_or(0);
+                self.x = w.saturating_sub(1);
             }
         }
 
         if self.y + 1 > h {
             let rows = self.y + 1 - h;
             self.scroll(rows, callback);
-            self.y = self.y.checked_sub(rows).unwrap_or(0);
+            self.y = self.y.saturating_sub(rows);
         }
     }
 
@@ -230,7 +230,7 @@ impl State {
     pub fn csi<F: FnMut(Event)>(&mut self, c: char, params: &[i64], _intermediates: &[u8], callback: &mut F) {
         match c {
             'A' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 if self.y < self.top_margin {
                     self.y = cmp::max(0, self.y as i64 - cmp::max(1, param)) as usize;
                 } else {
@@ -238,7 +238,7 @@ impl State {
                 }
             },
             'B' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 if self.y > self.bottom_margin {
                     self.y = cmp::max(0, cmp::min(self.h as i64 - 1, self.y as i64 + cmp::max(1, param))) as usize;
                 } else {
@@ -246,31 +246,31 @@ impl State {
                 }
             },
             'C' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.x = cmp::max(0, cmp::min(self.w as i64 - 1, self.x as i64 + cmp::max(1, param))) as usize;
             },
             'D' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.x = cmp::max(0, self.x as i64 - cmp::max(1, param)) as usize;
             },
             'E' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.x = 0;
-                self.y += cmp::min(self.h.checked_sub(self.y + 1).unwrap_or(0), cmp::max(1, param) as usize);
+                self.y += cmp::min(self.h.saturating_sub(self.y + 1), cmp::max(1, param) as usize);
             },
             'F' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.x = 0;
                 self.y -= cmp::min(self.y, cmp::max(1, param) as usize);
             },
             'G' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 let col = cmp::max(1, param);
                 self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
             },
             'H' | 'f' => {
                 {
-                    let param = params.get(0).map(|v| *v).unwrap_or(1);
+                    let param = params.first().copied().unwrap_or(1);
                     let row = cmp::max(1, param);
 
                     let (top, bottom) = if self.origin {
@@ -283,7 +283,7 @@ impl State {
                 }
 
                 {
-                    let param = params.get(1).map(|v| *v).unwrap_or(1);
+                    let param = params.get(1).copied().unwrap_or(1);
                     let col = cmp::max(1, param);
                     self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
                 }
@@ -291,7 +291,7 @@ impl State {
             'J' => {
                 self.fix_cursor(callback);
 
-                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                let param = params.first().copied().unwrap_or(0);
                 match param {
                     0 => {
                         // Clear current row from cursor
@@ -353,7 +353,7 @@ impl State {
             'K' => {
                 self.fix_cursor(callback);
 
-                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                let param = params.first().copied().unwrap_or(0);
                 match param {
                     0 => {
                         // Clear current row from cursor
@@ -391,7 +391,7 @@ impl State {
                 }
             },
             'P' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 let cols = cmp::max(0, cmp::min(self.w as i64 - self.x as i64 - 1, param)) as usize;
                 //TODO: Use min and max to ensure correct behavior
                 callback(Event::Move {
@@ -411,26 +411,26 @@ impl State {
                 });
             },
             'S' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.scroll(cmp::max(0, param) as usize, callback);
             },
             'T' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.reverse_scroll(cmp::max(0, param) as usize, callback);
             },
             'c' => {
-                let report = format!("\x1B[?6c");
+                let report = "\x1B[?6c".to_string();
                 callback(Event::Input {
                     data: &report.into_bytes()
                 });
             },
             'd' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 self.y = cmp::max(0, cmp::min(self.h as i64 - 1, param - 1)) as usize;
             },
             'h' => {
                 //TODO: Check intermediate
-                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                let param = params.first().copied().unwrap_or(0);
                 match param {
                     3 => {
                         self.x = 0;
@@ -493,7 +493,7 @@ impl State {
             },
             'l' => {
                 //TODO: Check intermediate
-                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                let param = params.first().copied().unwrap_or(0);
                 match param {
                     3 => {
                         self.x = 0;
@@ -556,7 +556,7 @@ impl State {
             },
             'm' => {
                 // Display attributes
-                let mut value_iter = if params.len() == 0 {
+                let mut value_iter = if params.is_empty() {
                     [0].iter()
                 } else {
                     params.iter()
@@ -601,17 +601,17 @@ impl State {
                             self.strikethrough = false;
                         },
                         30 ..= 37 => self.foreground = Color::Ansi(*value as u8 - 30),
-                        38 => match value_iter.next().map(|v| *v).unwrap_or(0) {
+                        38 => match value_iter.next().copied().unwrap_or(0) {
                             2 => {
                                 //True color
-                                let r = value_iter.next().map(|v| *v).unwrap_or(0);
-                                let g = value_iter.next().map(|v| *v).unwrap_or(0);
-                                let b = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let r = value_iter.next().copied().unwrap_or(0);
+                                let g = value_iter.next().copied().unwrap_or(0);
+                                let b = value_iter.next().copied().unwrap_or(0);
                                 self.foreground = Color::TrueColor(r as u8, g as u8, b as u8);
                             },
                             5 => {
                                 //256 color
-                                let color_value = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let color_value = value_iter.next().copied().unwrap_or(0);
                                 self.foreground = Color::Ansi(color_value as u8);
                             },
                             _ => {}
@@ -620,17 +620,17 @@ impl State {
                             self.foreground = self.foreground_default;
                         },
                         40 ..= 47 => self.background = Color::Ansi(*value as u8 - 40),
-                        48 => match value_iter.next().map(|v| *v).unwrap_or(0) {
+                        48 => match value_iter.next().copied().unwrap_or(0) {
                             2 => {
                                 //True color
-                                let r = value_iter.next().map(|v| *v).unwrap_or(0);
-                                let g = value_iter.next().map(|v| *v).unwrap_or(0);
-                                let b = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let r = value_iter.next().copied().unwrap_or(0);
+                                let g = value_iter.next().copied().unwrap_or(0);
+                                let b = value_iter.next().copied().unwrap_or(0);
                                 self.background = Color::TrueColor(r as u8, g as u8, b as u8);
                             },
                             5 => {
                                 //256 color
-                                let color_value = value_iter.next().map(|v| *v).unwrap_or(0);
+                                let color_value = value_iter.next().copied().unwrap_or(0);
                                 self.background = Color::Ansi(color_value as u8);
                             },
                             _ => {}
@@ -645,7 +645,7 @@ impl State {
                 }
             },
             'n' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(0);
+                let param = params.first().copied().unwrap_or(0);
                 match param {
                     6 => {
                         let report = format!("\x1B[{};{}R", self.y + 1, self.x + 1);
@@ -659,8 +659,8 @@ impl State {
                 }
             },
             'r' => {
-                let top = params.get(0).map(|v| *v).unwrap_or(1);
-                let bottom = params.get(1).map(|v| *v).unwrap_or(self.h as i64);
+                let top = params.first().copied().unwrap_or(1);
+                let bottom = params.get(1).copied().unwrap_or(self.h as i64);
                 self.top_margin = cmp::max(0, cmp::min(self.h as isize - 1, top as isize - 1)) as usize;
                 self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
             },
@@ -673,7 +673,7 @@ impl State {
                 self.y = self.save_y;
             },
             '@' => {
-                let param = params.get(0).map(|v| *v).unwrap_or(1);
+                let param = params.first().copied().unwrap_or(1);
                 let cols = cmp::max(0, cmp::min(self.w as i64 - self.x as i64 - 1, param)) as usize;
                 //TODO: Use min and max to ensure correct behavior
                 callback(Event::Move {
@@ -720,7 +720,7 @@ impl State {
                 self.save_y = self.y;
             },
             '8' => {
-                match intermediates.get(0).map(|v| *v as char) {
+                match intermediates.first().map(|v| *v as char) {
                     Some('#') => {
                         // Test pattern
                         for x in (self.w/2).checked_sub(30).unwrap_or(10)..(self.w/2).checked_add(30).unwrap_or(70) {
@@ -791,7 +791,7 @@ impl State {
     }
 
     pub fn osc<F: FnMut(Event)>(&mut self, params: &[&[u8]], callback: &mut F) {
-        match params.get(0).map(|s| s.get(0).map(|b| *b).unwrap_or(0)).unwrap_or(0) as char {
+        match params.first().map(|s| s.first().copied().unwrap_or(0)).unwrap_or(0) as char {
             '0' | '1' | '2' => if let Some(bytes) = params.get(1) {
                 if let Ok(string) = str::from_utf8(bytes) {
                     callback(Event::Title {
@@ -878,7 +878,7 @@ impl Console {
     }
 
     pub fn write<F: FnMut(Event)>(&mut self, bytes: &[u8], mut callback: F) {
-        for byte in bytes.iter() {
+        for byte in bytes {
             self.parser.advance(&mut Performer {
                 state: &mut self.state,
                 callback: &mut callback,
