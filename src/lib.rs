@@ -229,7 +229,7 @@ impl State {
 
     pub fn csi<F: FnMut(Event)>(&mut self, c: char, params: &[i64], _intermediates: &[u8], callback: &mut F) {
         match c {
-            'A' => {
+            'A' => { // CUU (Cursor Up)
                 let param = params.first().copied().unwrap_or(1);
                 if self.y < self.top_margin {
                     self.y = cmp::max(0, self.y as i64 - cmp::max(1, param)) as usize;
@@ -237,7 +237,7 @@ impl State {
                     self.y = cmp::max(self.top_margin as i64, self.y as i64 - cmp::max(1, param)) as usize;
                 }
             },
-            'B' => {
+            'B' => { // CUD (Cursor Down)
                 let param = params.first().copied().unwrap_or(1);
                 if self.y > self.bottom_margin {
                     self.y = cmp::max(0, cmp::min(self.h as i64 - 1, self.y as i64 + cmp::max(1, param))) as usize;
@@ -245,30 +245,30 @@ impl State {
                     self.y = cmp::max(0, cmp::min(self.bottom_margin as i64, self.y as i64 + cmp::max(1, param))) as usize;
                 }
             },
-            'C' => {
+            'C' => { // CUF (Cursor Forward/Right)
                 let param = params.first().copied().unwrap_or(1);
                 self.x = cmp::max(0, cmp::min(self.w as i64 - 1, self.x as i64 + cmp::max(1, param))) as usize;
             },
-            'D' => {
+            'D' => { // CUB (Cursor Back/Left)
                 let param = params.first().copied().unwrap_or(1);
                 self.x = cmp::max(0, self.x as i64 - cmp::max(1, param)) as usize;
             },
-            'E' => {
+            'E' => { // CNL (Cursor Next Line)
                 let param = params.first().copied().unwrap_or(1);
                 self.x = 0;
                 self.y += cmp::min(self.h.saturating_sub(self.y + 1), cmp::max(1, param) as usize);
             },
-            'F' => {
+            'F' => { // CPL (Cursor Previous Line)
                 let param = params.first().copied().unwrap_or(1);
                 self.x = 0;
                 self.y -= cmp::min(self.y, cmp::max(1, param) as usize);
             },
-            'G' => {
+            'G' => { // CHA (Cursor Horizontal Absolute)
                 let param = params.first().copied().unwrap_or(1);
                 let col = cmp::max(1, param);
                 self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
             },
-            'H' | 'f' => {
+            'H' | 'f' => { // H = CUP (Cursor Position); f = HVP (Horizontal Vertical Position)
                 {
                     let param = params.first().copied().unwrap_or(1);
                     let row = cmp::max(1, param);
@@ -288,7 +288,7 @@ impl State {
                     self.x = cmp::max(0, cmp::min(self.w as i64 - 1, col - 1)) as usize;
                 }
             },
-            'J' => {
+            'J' => { // ED (Erase in Display)
                 self.fix_cursor(callback);
 
                 let param = params.first().copied().unwrap_or(0);
@@ -350,7 +350,7 @@ impl State {
                     }
                 }
             },
-            'K' => {
+            'K' => { // EL (Erase in Line)
                 self.fix_cursor(callback);
 
                 let param = params.first().copied().unwrap_or(0);
@@ -390,7 +390,7 @@ impl State {
                     }
                 }
             },
-            'P' => {
+            'P' => { // DCH (Delete Character)
                 let param = params.first().copied().unwrap_or(1);
                 let cols = cmp::max(0, cmp::min(self.w as i64 - self.x as i64 - 1, param)) as usize;
                 //TODO: Use min and max to ensure correct behavior
@@ -410,29 +410,29 @@ impl State {
                     color: self.background,
                 });
             },
-            'S' => {
+            'S' => { // SU (Scroll Up)
                 let param = params.first().copied().unwrap_or(1);
                 self.scroll(cmp::max(0, param) as usize, callback);
             },
-            'T' => {
+            'T' => { // SD (Scroll Down)
                 let param = params.first().copied().unwrap_or(1);
                 self.reverse_scroll(cmp::max(0, param) as usize, callback);
             },
             'c' => {
-                let report = "\x1B[?6c".to_string();
+                let report = "\x1B[?6c".to_string(); // VT102
                 callback(Event::Input {
                     data: &report.into_bytes()
                 });
             },
-            'd' => {
+            'd' => { // VPA (Line Position Absolute)
                 let param = params.first().copied().unwrap_or(1);
                 self.y = cmp::max(0, cmp::min(self.h as i64 - 1, param - 1)) as usize;
             },
-            'h' => {
+            'h' => { // DECSET (DEC Private Mode Set)
                 //TODO: Check intermediate
                 let param = params.first().copied().unwrap_or(0);
                 match param {
-                    3 => {
+                    3 => { // DECCOLM (132 Column Mode) VT100
                         self.x = 0;
                         self.y = 0;
                         self.top_margin = 0;
@@ -454,13 +454,13 @@ impl State {
                             color: self.background
                         });
                     },
-                    6 => {
+                    6 => { // DECOM (Origin Mode) VT100
                         self.origin = true;
                         self.x = 0;
                         self.y = self.top_margin;
                     },
-                    7 => self.autowrap = true,
-                    25 => self.cursor = true,
+                    7 => self.autowrap = true, // DECAWM (Auto-Wrap Mode) VT100
+                    25 => self.cursor = true, // DECTCEM (Show Cursor) VT220
                     47 => callback(Event::ScreenBuffer {
                         alternate: true,
                         clear: false,
@@ -491,11 +491,11 @@ impl State {
                     }
                 }
             },
-            'l' => {
+            'l' => { // DECRST (DEC Private Reset Mode)
                 //TODO: Check intermediate
                 let param = params.first().copied().unwrap_or(0);
                 match param {
-                    3 => {
+                    3 => { // DECCOLM (80 Column Mode) VT100
                         self.x = 0;
                         self.y = 0;
                         self.top_margin = 0;
@@ -517,13 +517,13 @@ impl State {
                             color: self.background
                         });
                     },
-                    6 => {
+                    6 => { // DECOM (Normal Cursor Mode) VT100
                         self.origin = false;
                         self.x = 0;
                         self.y = 0;
                     },
-                    7 => self.autowrap = false,
-                    25 => self.cursor = false,
+                    7 => self.autowrap = false, // DECAWM (No Auto-Wrap Mode) VT100
+                    25 => self.cursor = false, // DECTCEM (Hide Cursor) VT220
                     47 => callback(Event::ScreenBuffer {
                         alternate: false,
                         clear: false,
@@ -554,7 +554,7 @@ impl State {
                     }
                 }
             },
-            'm' => {
+            'm' => { // SGR (Select Graphic Rendition)
                 // Display attributes
                 let mut value_iter = if params.is_empty() {
                     [0].iter()
@@ -563,7 +563,7 @@ impl State {
                 };
                 while let Some(value) = value_iter.next() {
                     match *value {
-                        0 => {
+                        0 => { // default
                             self.foreground = self.foreground_default;
                             self.background = self.background_default;
                             self.bold = false;
@@ -664,11 +664,11 @@ impl State {
                 self.top_margin = cmp::max(0, cmp::min(self.h as isize - 1, top as isize - 1)) as usize;
                 self.bottom_margin = cmp::max(self.top_margin as isize, cmp::min(self.h as isize - 1, bottom as isize - 1)) as usize;
             },
-            's' => {
+            's' => { // SCP,SCOSC (Save Current Cursor Position)
                 self.save_x = self.x;
                 self.save_y = self.y;
             },
-            'u' => {
+            'u' => { // RCP,SCORC (Restore Saved Cursor Position)
                 self.x = self.save_x;
                 self.y = self.save_y;
             },
@@ -700,26 +700,26 @@ impl State {
 
     pub fn esc<F: FnMut(Event)>(&mut self, c: char, intermediates: &[u8], callback: &mut F) {
         match c {
-            'D' => {
+            'D' => { // IND (Index) [ECMA-48 - depreciated in 4th edition, removed in 5th edition]
                 self.y += 1;
             },
-            'E' => {
+            'E' => { // NEL (Next Line)
                 self.x = 0;
                 self.y += 1;
             },
-            'M' => {
+            'M' => { // RI (Reverse Index/Line Feed)
                 while self.y <= self.top_margin {
                     self.reverse_scroll(1, callback);
                     self.y += 1;
                 }
                 self.y -= 1;
             },
-            '7' => {
+            '7' => { // DECSC (DEC Save Cursor)
                 // Save
                 self.save_x = self.x;
                 self.save_y = self.y;
             },
-            '8' => {
+            '8' => { // DECRC (DEC Restore Cursor)
                 match intermediates.first().map(|v| *v as char) {
                     Some('#') => {
                         // Test pattern
@@ -756,7 +756,7 @@ impl State {
                     }
                 }
             },
-            'c' => {
+            'c' => { // RIS (Reset to Initial State)
                 // Reset
                 self.x = 0;
                 self.y = 0;
